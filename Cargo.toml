@@ -1,3 +1,10 @@
 [workspace]
-members = ["topic_service", "diff_service"]
+members = ["topic_service", "diff_service", "topic_core"]
 resolver = "3"
+
+[workspace.dependencies]
+tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
+uuid = { version = "1.17.0", features = ["v4"] }
+axum = "0.8.4"
+serde = "1.0.219"
+serde_json = "1.0.142"
