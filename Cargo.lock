@@ -116,6 +116,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "tokio",
+ "topic_core",
  "uuid",
 ]
 
@@ -553,6 +554,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "tokio",
+ "topic_core",
  "uuid",
 ]
 
