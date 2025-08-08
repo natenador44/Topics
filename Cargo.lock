@@ -720,6 +720,7 @@ dependencies = [
  "axum",
  "error-stack",
  "error_set",
+ "serde",
  "tokio",
  "topic_core",
  "tracing",

@@ -11,4 +11,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 error_set = { workspace = true }
 error-stack = { workspace = true }
+serde = { workspace = true }
 topic_core = { path = "../topic_core" }
