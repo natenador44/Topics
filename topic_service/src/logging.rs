@@ -6,7 +6,7 @@ use crate::error::Error;
 pub fn init() -> Result<(), Error> {
     tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(EnvFilter::from_env("PARKOUR_LOG"))
+        .with(EnvFilter::from_env("TOPICS_LOG"))
         .init();
     // TODO file logging
     Ok(())

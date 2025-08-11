@@ -1,9 +1,9 @@
 use error_stack::Result;
 use tracing::{error, info};
 
+mod app;
 mod error;
 mod logging;
-mod service;
 
 use error::Error;
 
@@ -20,5 +20,5 @@ async fn main() {
 async fn try_main() -> Result<(), Error> {
     logging::init()?;
 
-    service::run().await
+    app::run().await
 }

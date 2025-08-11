@@ -4,12 +4,13 @@ use error_stack::{Result, ResultExt};
 use tokio::net::TcpListener;
 use tracing::info;
 
-mod topic;
+mod pagination;
+mod routes;
 
 pub async fn run() -> Result<(), Error> {
     let listener = build_listener().await?;
 
-    let routes = build_routes();
+    let routes = routes::build();
 
     info!(
         "starting up topic service on port {}",
@@ -26,10 +27,6 @@ async fn serve_on(listener: TcpListener, routes: Router) -> Result<(), Error> {
     axum::serve(listener, routes)
         .await
         .change_context(Error::InitServe)
-}
-
-fn build_routes() -> Router {
-    Router::new().merge(topic::routes())
 }
 
 async fn build_listener() -> Result<TcpListener, Error> {
