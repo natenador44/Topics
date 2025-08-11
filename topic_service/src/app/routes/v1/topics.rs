@@ -18,7 +18,7 @@ pub struct TopicRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SearchCriteria {
+pub struct TopicSearch {
     name: Option<String>,
     description: Option<String>,
 }
@@ -27,7 +27,7 @@ pub struct SearchCriteria {
 /// Can also specify `SearchCriteria` to further reduce results based on name, description, or more.
 pub async fn search(
     Query(pagination): Query<Pagination>,
-    Query(search): Query<SearchCriteria>,
+    Query(search): Query<TopicSearch>,
 ) -> impl IntoResponse {
     debug!("topic search -> pagination: {pagination:?}, search: {search:?}")
 }

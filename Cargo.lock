@@ -730,6 +730,7 @@ name = "topic_core"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -742,6 +743,7 @@ dependencies = [
  "error-stack",
  "error_set",
  "serde",
+ "serde_json",
  "tokio",
  "topic_core",
  "tracing",

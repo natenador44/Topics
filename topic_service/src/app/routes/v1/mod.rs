@@ -1,16 +1,15 @@
 use axum::{
     Router,
-    routing::{delete, get, post, put},
+    routing::{MethodRouter, Route, delete, get, post, put},
 };
-use const_format::formatcp;
-use serde::Deserialize;
+use const_format::{concatcp, formatcp};
 
 mod entities;
 mod topics;
 
 const VERSION: &str = "/v1";
-const TOPICS_PATH: &str = "/topics";
-const ENTITY_PATH: &str = "/entities";
+const TOPICS_PATH: &str = "topics";
+const ENTITIES_PATH: &str = "entities";
 
 pub fn routes() -> Router {
     let merged = topic_routes().merge(entity_routes());
@@ -19,19 +18,39 @@ pub fn routes() -> Router {
 
 fn topic_routes() -> Router {
     Router::new()
-        .route(TOPICS_PATH, get(topics::search))
-        .route(TOPICS_PATH, post(topics::create))
-        .route(formatcp!("{}/{{topic_id}}", TOPICS_PATH), get(topics::get))
+        .route(concatcp!("/", TOPICS_PATH), get(topics::search))
+        .route(concatcp!("/", TOPICS_PATH), post(topics::create))
+        .route(formatcp!("/{TOPICS_PATH}/{{topic_id}}"), get(topics::get))
         .route(
-            formatcp!("{}/{{topic_id}}", TOPICS_PATH),
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}"),
             put(topics::update),
         )
         .route(
-            formatcp!("{}/{{topic_id}}", TOPICS_PATH),
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}"),
             delete(topics::delete),
         )
 }
 
 fn entity_routes() -> Router {
     Router::new()
+        .route(
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}/{ENTITIES_PATH}"),
+            get(entities::search),
+        )
+        .route(
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}/{ENTITIES_PATH}/{{entity_id}}"),
+            get(entities::get),
+        )
+        .route(
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}/{ENTITIES_PATH}"),
+            post(entities::create),
+        )
+        .route(
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}/{ENTITIES_PATH}/{{entity_id}}"),
+            put(entities::update),
+        )
+        .route(
+            formatcp!("/{TOPICS_PATH}/{{topic_id}}/{ENTITIES_PATH}/{{entity_id}}"),
+            delete(entities::delete),
+        )
 }
