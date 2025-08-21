@@ -1,58 +1,138 @@
 use axum::{
     Json,
     extract::{Path, Query},
-    http::StatusCode,
+    http::{self, StatusCode},
     response::IntoResponse,
+    routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use topic_core::v1::TopicId;
-use tracing::{Level, debug, instrument};
+use tracing::{Level, instrument};
+use utoipa::{OpenApi, ToSchema};
+use utoipa_axum::router::OpenApiRouter;
 use uuid::Uuid;
 
-use crate::app::pagination::Pagination;
+use crate::app::{
+    models::{Topic, TopicId},
+    pagination::Pagination,
+};
 
-#[derive(Debug, Deserialize)]
+#[derive(OpenApi)]
+#[openapi(paths(search_topics, get_topic, create_topic, delete_topic, update_topic,))]
+pub struct ApiDoc;
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicRequest {
     name: String,
     description: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicSearch {
     name: Option<String>,
     description: Option<String>,
 }
 
+const TOPIC_SEARCH_PATH: &str = "/";
+const TOPIC_GET_PATH: &str = "/{topic_id}";
+const TOPIC_CREATE_PATH: &str = "/";
+const TOPIC_DELETE_PATH: &str = "/{topic_id}";
+const TOPIC_UPDATE_PATH: &str = "/{topic_id}";
+
+pub fn routes() -> OpenApiRouter {
+    OpenApiRouter::new()
+        .route(TOPIC_SEARCH_PATH, get(search_topics))
+        .route(TOPIC_GET_PATH, get(get_topic))
+        .route(TOPIC_CREATE_PATH, post(create_topic))
+        .route(TOPIC_DELETE_PATH, delete(delete_topic))
+        .route(TOPIC_UPDATE_PATH, put(update_topic))
+}
+
 /// Query and filter for `Topic`s. Can specify pagination (page and page_size) to limit results returned.
 /// Can also specify `SearchCriteria` to further reduce results based on name, description, or more.
 #[instrument(level=Level::DEBUG)]
-pub async fn search(
+#[utoipa::path(
+    get,
+    path = TOPIC_SEARCH_PATH,
+    responses(
+        (status = OK, description = "At least one topic was found given the search criteria", body = Vec<Topic>),
+        (status = NO_CONTENT, description = "No topics were found for the given search criteria"),
+    ),
+    params(
+        ("page" = usize, Query, description = "Select certain page of results. Defaults to 1"),
+        ("page_size" = Option<usize>, Query, description = "Max number of results to return per page. Defaults to ..."),
+        ("name" = String, Query, description = "Filter topics by name"),
+        ("description" = String, Query, description = "Filter topics by description"),
+    )
+)]
+pub async fn search_topics(
     Query(pagination): Query<Pagination>,
     Query(search): Query<TopicSearch>,
 ) -> impl IntoResponse {
+    http::StatusCode::OK
 }
 
 /// Get the `Topic` associated with the given `TopicId`.
 /// Returns 404 if the topic does not exist, otherwise 200 with a `Json<Topic>` payload.
 #[instrument(level=Level::DEBUG)]
-pub async fn get(Path(topic_id): Path<TopicId>) -> impl IntoResponse {}
+#[utoipa::path(
+    get,
+    path = TOPIC_GET_PATH,
+    responses(
+        (status = OK, description = "A topic was found that matched the given TopicId", body = Topic),
+        (status = NOT_FOUND, description = "No topics with the given TopicId were found"),
+    ),
+    params(
+        ("topic_id" = TopicSearch, Path, description = "The TopicId to find"),
+    )
+)]
+pub async fn get_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {}
 
 /// Create a new `Topic` and return the new `Topic`'s `TopicId`, with a 201 CREATED status code
 #[instrument(level=Level::DEBUG)]
-pub async fn create(Json(topic): Json<TopicRequest>) -> impl IntoResponse {
+#[utoipa::path(
+    post,
+    path = TOPIC_CREATE_PATH,
+    responses(
+        (status = OK, description = "A topic was successfully created, and its TopicId is returned", body = TopicId),
+    ),
+    request_body = TopicRequest
+)]
+pub async fn create_topic(Json(topic): Json<TopicRequest>) -> impl IntoResponse {
     Json(Uuid::new_v4()) // not sure if this should be JSON but may as well be consistent right now
 }
 
 /// Delete the `Topic` associated with the given `TopicId`, returning a 204 NO_CONTENT status code
 #[instrument(level=Level::DEBUG)]
-pub async fn delete(Path(topic_id): Path<TopicId>) -> impl IntoResponse {
+#[utoipa::path(
+    post,
+    path = TOPIC_DELETE_PATH,
+    responses(
+        (status = NO_CONTENT, description = "The topic was successfully deleted, or never existed"),
+    ),
+    params(
+        ("topic_id" = TopicId, Path, description = "The TopicId to delete")
+    )
+)]
+pub async fn delete_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
 /// Update the `Topic` associated with the given `TopicId` using the given `Topic` information.
 /// Returns the updated version of the `Topic` if the `topic_id` exists, otherwise a 404 NOT FOUND
 #[instrument(level=Level::DEBUG)]
-pub async fn update(
+#[utoipa::path(
+    post,
+    path = TOPIC_UPDATE_PATH,
+    responses(
+        (status = OK, description = "The topic was successfully updated", body = Topic),
+        (status = NOT_FOUND, description = "The topic was not found so could not be updated"),
+    ),
+    params(
+        ("topic_id" = TopicId, Path, description = "The TopicId to delete")
+    ),
+    request_body = TopicRequest,
+)]
+pub async fn update_topic(
     Path(topic_id): Path<TopicId>,
     Json(topic): Json<TopicRequest>,
 ) -> impl IntoResponse {

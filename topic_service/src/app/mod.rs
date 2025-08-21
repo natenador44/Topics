@@ -4,6 +4,7 @@ use error_stack::{Result, ResultExt};
 use tokio::net::TcpListener;
 use tracing::info;
 
+mod models;
 mod pagination;
 mod routes;
 

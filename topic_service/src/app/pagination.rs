@@ -1,10 +1,11 @@
 use serde::{Deserialize, Deserializer, de::Visitor};
+use utoipa::ToSchema;
 
 const fn default_page() -> usize {
     1
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct Pagination {
     #[serde(default = "default_page")]
     // #[serde(deserialize_with = "parse_page")]
