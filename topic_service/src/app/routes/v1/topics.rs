@@ -97,7 +97,7 @@ pub async fn get_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {}
     request_body = TopicRequest
 )]
 pub async fn create_topic(Json(topic): Json<TopicRequest>) -> impl IntoResponse {
-    Json(Uuid::new_v4()) // not sure if this should be JSON but may as well be consistent right now
+    Json(Uuid::now_v7()) // not sure if this should be JSON but may as well be consistent right now
 }
 
 /// Delete the topic associated with the given id
