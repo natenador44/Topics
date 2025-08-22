@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub type TopicSetId = Uuid;
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TopicSet {
-    pub id: TopicSetId,
+    pub id: Uuid,
 }

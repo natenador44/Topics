@@ -5,34 +5,15 @@ use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::TopicId;
+pub type EntityId = Uuid;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct EntityId {
-    #[schema(value_type=String)]
-    #[serde(flatten)]
-    inner: Uuid,
-}
-
-impl EntityId {
-    pub fn new() -> Self {
-        Self {
-            inner: Uuid::new_v4(),
-        }
-    }
-}
-
-impl Deref for EntityId {
-    type Target = Uuid;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+/// A JSON payload that is part of a set, which in turn is a part of a topic.
+/// Each topic can have multiple sets, and each set can have multiple entities.
 pub struct Entity {
-    pub id: EntityId,
-    pub topic_id: TopicId,
+    pub id: Uuid,
+    pub topic_id: Uuid,
+    pub set_id: Uuid,
+    pub identifiers: Vec<Uuid>, // TODO better way to store/identify these
     pub payload: Value,
 }

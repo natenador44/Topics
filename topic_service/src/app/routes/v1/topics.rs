@@ -47,7 +47,7 @@ pub fn routes() -> OpenApiRouter {
         .route(TOPIC_UPDATE_PATH, put(update_topic))
 }
 
-/// Query and filter for `Topic`s. Can specify pagination (page and page_size) to limit results returned.
+/// Query and filter for topics. Can specify pagination (page and page_size) to limit results returned.
 /// Can also specify `SearchCriteria` to further reduce results based on name, description, or more.
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
@@ -58,10 +58,10 @@ pub fn routes() -> OpenApiRouter {
         (status = NO_CONTENT, description = "No topics were found for the given search criteria"),
     ),
     params(
-        ("page" = usize, Query, description = "Select certain page of results. Defaults to 1"),
+        ("page" = Option<usize>, Query, description = "Select certain page of results. Defaults to 1"),
         ("page_size" = Option<usize>, Query, description = "Max number of results to return per page. Defaults to ..."),
-        ("name" = String, Query, description = "Filter topics by name"),
-        ("description" = String, Query, description = "Filter topics by description"),
+        ("name" = Option<String>, Query, description = "Filter topics by name"),
+        ("description" = Option<String>, Query, description = "Filter topics by description"),
     )
 )]
 pub async fn search_topics(
@@ -71,8 +71,7 @@ pub async fn search_topics(
     http::StatusCode::OK
 }
 
-/// Get the `Topic` associated with the given `TopicId`.
-/// Returns 404 if the topic does not exist, otherwise 200 with a `Json<Topic>` payload.
+/// Get the topic associated with the given id.
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     get,
@@ -82,18 +81,18 @@ pub async fn search_topics(
         (status = NOT_FOUND, description = "No topics with the given TopicId were found"),
     ),
     params(
-        ("topic_id" = TopicSearch, Path, description = "The TopicId to find"),
+        ("topic_id" = Uuid, Path, description = "The TopicId to find"),
     )
 )]
 pub async fn get_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {}
 
-/// Create a new `Topic` and return the new `Topic`'s `TopicId`, with a 201 CREATED status code
+/// Create a new Topic and return its ID
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     post,
     path = TOPIC_CREATE_PATH,
     responses(
-        (status = OK, description = "A topic was successfully created, and its TopicId is returned", body = TopicId),
+        (status = CREATED, description = "A topic was successfully created", body = Uuid),
     ),
     request_body = TopicRequest
 )]
@@ -101,34 +100,33 @@ pub async fn create_topic(Json(topic): Json<TopicRequest>) -> impl IntoResponse 
     Json(Uuid::new_v4()) // not sure if this should be JSON but may as well be consistent right now
 }
 
-/// Delete the `Topic` associated with the given `TopicId`, returning a 204 NO_CONTENT status code
+/// Delete the topic associated with the given id
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
-    post,
+    delete,
     path = TOPIC_DELETE_PATH,
     responses(
         (status = NO_CONTENT, description = "The topic was successfully deleted, or never existed"),
     ),
     params(
-        ("topic_id" = TopicId, Path, description = "The TopicId to delete")
+        ("topic_id" = Uuid, Path, description = "The ID of the topic to delete to delete")
     )
 )]
 pub async fn delete_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-/// Update the `Topic` associated with the given `TopicId` using the given `Topic` information.
-/// Returns the updated version of the `Topic` if the `topic_id` exists, otherwise a 404 NOT FOUND
+/// Update the topic associated with the given id using the given information.
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
-    post,
+    put,
     path = TOPIC_UPDATE_PATH,
     responses(
         (status = OK, description = "The topic was successfully updated", body = Topic),
         (status = NOT_FOUND, description = "The topic was not found so could not be updated"),
     ),
     params(
-        ("topic_id" = TopicId, Path, description = "The TopicId to delete")
+        ("topic_id" = Uuid, Path, description = "The TopicId to delete")
     ),
     request_body = TopicRequest,
 )]
