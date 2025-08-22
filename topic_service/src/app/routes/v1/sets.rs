@@ -11,7 +11,7 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 use uuid::Uuid;
 
-use crate::app::models::{Entity, EntityId, EntityIdentifierId, TopicId, TopicSetId};
+use crate::app::models::{Entity, EntityId, IdentifierId, TopicId, TopicSetId};
 
 #[derive(OpenApi)]
 #[openapi(paths(create_set, add_entity_to_set, delete_set, delete_entity_in_set,))]

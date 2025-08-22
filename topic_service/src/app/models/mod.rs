@@ -4,6 +4,6 @@ mod topic;
 mod topic_set;
 
 pub use entity::{Entity, EntityId};
-pub use entity_identifier::{EntityIdentifier, EntityIdentifierId};
+pub use entity_identifier::{Identifier, IdentifierId};
 pub use topic::{Topic, TopicId};
 pub use topic_set::{TopicSet, TopicSetId};
