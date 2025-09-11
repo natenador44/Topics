@@ -1,6 +1,9 @@
 use const_format::formatcp;
+use repository::Repository;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
+
+use crate::app::state::AppState;
 
 mod identifiers;
 mod sets;
@@ -21,10 +24,18 @@ const TOPICS_PATH: &str = "/topics";
 const IDENTIFIERS_PATH: &str = formatcp!("{TOPICS_PATH}/{{topic_id}}/identifers");
 const SETS_PATH: &str = formatcp!("{TOPICS_PATH}/{{topic_id}}/sets");
 
-pub fn routes() -> OpenApiRouter {
+// see https://docs.rs/axum/latest/axum/struct.Router.html#method.with_state if you're curious why the return type is generic.
+// we need to end up with `Router<()>`, and this I guess does that.
+pub fn routes<T, S>(app_state: AppState<T>) -> OpenApiRouter<S>
+where
+    T: Repository + 'static,
+{
     let merged = OpenApiRouter::new()
         .nest(TOPICS_PATH, topics::routes())
         .merge(OpenApiRouter::new().nest(IDENTIFIERS_PATH, identifiers::routes()))
         .merge(OpenApiRouter::new().nest(SETS_PATH, sets::routes()));
-    OpenApiRouter::new().nest(VERSION_PATH, merged)
+
+    OpenApiRouter::new()
+        .nest(VERSION_PATH, merged)
+        .with_state(app_state)
 }

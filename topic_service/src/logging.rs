@@ -1,9 +1,9 @@
 use error_stack::Result;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::error::Error;
+use crate::error::InitError;
 
-pub fn init() -> Result<(), Error> {
+pub fn init() -> Result<(), InitError> {
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_env("TOPICS_LOG"))

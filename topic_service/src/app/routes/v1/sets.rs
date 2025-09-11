@@ -4,14 +4,17 @@ use axum::{
     response::IntoResponse,
     routing::{delete, post, put},
 };
+use repository::Repository;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
-use uuid::Uuid;
 
-use crate::app::models::{Entity, EntityId, IdentifierId, TopicId, TopicSetId};
+use crate::app::{
+    models::{EntityId, TopicId, TopicSetId},
+    state::AppState,
+};
 
 #[derive(OpenApi)]
 #[openapi(paths(create_set, add_entity_to_set, delete_set, delete_entity_in_set,))]
@@ -28,7 +31,10 @@ const ADD_ENTITY_PATH: &str = "/{set_id}/entities";
 const DELETE_SET_PATH: &str = "/{set_id}";
 const REMOVE_ENTITY_PATH: &str = "/{set_id}/entities/{entity_id}";
 
-pub fn routes() -> OpenApiRouter {
+pub fn routes<T>() -> OpenApiRouter<AppState<T>>
+where
+    T: Repository + 'static,
+{
     OpenApiRouter::new()
         .route(CREATE_SET_PATH, post(create_set))
         .route(ADD_ENTITY_PATH, put(add_entity_to_set))

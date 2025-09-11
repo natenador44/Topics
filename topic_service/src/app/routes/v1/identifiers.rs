@@ -4,14 +4,16 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
+use repository::Repository;
 use serde::Deserialize;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::app::{
-    models::{EntityId, Identifier, IdentifierId, TopicId},
+    models::{Identifier, IdentifierId, TopicId},
     pagination::Pagination,
+    state::AppState,
 };
 
 #[derive(OpenApi)]
@@ -36,7 +38,10 @@ const IDENTIFIER_CREATE_PATH: &str = "/";
 const IDENTIFIER_DELETE_PATH: &str = "/{identifier_id}";
 const IDENTIFIER_UPDATE_PATH: &str = "/{identifier_id}";
 
-pub fn routes() -> OpenApiRouter {
+pub fn routes<T>() -> OpenApiRouter<AppState<T>>
+where
+    T: Repository + 'static,
+{
     OpenApiRouter::new()
         .route(IDENTIFIER_SEARCH_PATH, get(search_identifiers))
         .route(IDENTIFIER_GET_PATH, get(get_identifier))

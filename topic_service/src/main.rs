@@ -5,7 +5,7 @@ mod app;
 mod error;
 mod logging;
 
-use error::Error;
+use error::InitError;
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +17,7 @@ async fn main() {
     }
 }
 
-async fn try_main() -> Result<(), Error> {
+async fn try_main() -> Result<(), InitError> {
     logging::init()?;
 
     app::run().await

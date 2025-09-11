@@ -1,0 +1,15 @@
+services:
+    db:
+    image: postgres:17 # Uses the latest official PostgreSQL image
+    restart: always       # Restarts the container if it stops
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}       # Database username
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Database password
+      POSTGRES_DB: ${POSTGRES_DB}     # Database name
+    ports:
+      - "5432:5432" # Maps host port 5432 to container port 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data # Persists data to a named volume
+
+volumes:
+  pgdata: # Defines the named volume for data persistence

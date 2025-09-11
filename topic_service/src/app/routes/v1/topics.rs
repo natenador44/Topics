@@ -1,19 +1,27 @@
+use std::fmt::Debug;
+
 use axum::{
     Json,
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::{self, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response, Result},
     routing::{delete, get, post, put},
 };
+use repository::Repository;
 use serde::Deserialize;
-use tracing::{Level, instrument};
+use tracing::{Level, error, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 use uuid::Uuid;
 
-use crate::app::{
-    models::{Topic, TopicId},
-    pagination::Pagination,
+use crate::{
+    app::{
+        models::{Topic, TopicId},
+        pagination::Pagination,
+        services::Service,
+        state::AppState,
+    },
+    error::ServiceError,
 };
 
 #[derive(OpenApi)]
@@ -38,7 +46,10 @@ const TOPIC_CREATE_PATH: &str = "/";
 const TOPIC_DELETE_PATH: &str = "/{topic_id}";
 const TOPIC_UPDATE_PATH: &str = "/{topic_id}";
 
-pub fn routes() -> OpenApiRouter {
+pub fn routes<T>() -> OpenApiRouter<AppState<T>>
+where
+    T: Repository + 'static,
+{
     OpenApiRouter::new()
         .route(TOPIC_SEARCH_PATH, get(search_topics))
         .route(TOPIC_GET_PATH, get(get_topic))
@@ -49,7 +60,7 @@ pub fn routes() -> OpenApiRouter {
 
 /// Query and filter for topics. Can specify pagination (page and page_size) to limit results returned.
 /// Can also specify `SearchCriteria` to further reduce results based on name, description, or more.
-#[instrument(level=Level::DEBUG)]
+#[instrument(skip(service), ret)]
 #[utoipa::path(
     get,
     path = TOPIC_SEARCH_PATH,
@@ -64,11 +75,32 @@ pub fn routes() -> OpenApiRouter {
         ("description" = Option<String>, Query, description = "Filter topics by description"),
     )
 )]
-pub async fn search_topics(
+// #[axum::debug_handler]
+pub async fn search_topics<T>(
+    State(service): State<Service<T>>,
     Query(pagination): Query<Pagination>,
     Query(search): Query<TopicSearch>,
-) -> impl IntoResponse {
-    http::StatusCode::OK
+) -> Result<Response, ServiceError>
+where
+    T: Repository + Debug,
+{
+    let result = service.topic_service.search(
+        search.name.as_deref(),
+        search.description.as_deref(),
+        pagination,
+    );
+
+    match result {
+        Ok(topics) if topics.is_empty() => Ok(StatusCode::NO_CONTENT.into_response()),
+        Ok(topics) => Ok(Json::<Vec<Topic>>(topics).into_response()),
+        Err(e) => {
+            error!(
+                "failed to search for topics: {:?}",
+                e.change_context(ServiceError)
+            );
+            Err(ServiceError)
+        }
+    }
 }
 
 /// Get the topic associated with the given id.
