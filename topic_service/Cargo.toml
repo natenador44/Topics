@@ -17,9 +17,3 @@ const_format = { workspace = true }
 utoipa = { version = "5.4.0", features = ["axum_extras", "uuid"] }
 utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
-repository = { path = "../repository" }
-postgres-repository = { path = "../postgres-repository", optional = true }
-
-[features]
-default = ["postgres-repo-full"]
-postgres-repo-full = ["postgres-repository"]

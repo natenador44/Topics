@@ -1,4 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse};
+use error_stack::{Context, Report};
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitError {
@@ -6,22 +7,37 @@ pub enum InitError {
     Logging,
     #[error("failed to initialize port")]
     Port,
+    #[error("failed to initialize service")]
+    Service,
     #[error("failed to intialize and serve routes")]
     Serve,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error)]
 #[error("there was an error running the endpoint")]
-pub struct ServiceError;
+pub struct ServiceError<T: Context>(Report<T>);
 
-impl IntoResponse for ServiceError {
+impl<T: Context> std::fmt::Debug for ServiceError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<T> From<Report<T>> for ServiceError<T>
+where
+    T: Context,
+{
+    fn from(value: Report<T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: Context> IntoResponse for ServiceError<T> {
     fn into_response(self) -> axum::response::Response {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum TopicServiceError {
-    #[error("failed testing stuff")]
-    Test,
-}
+#[error("topic service failed")]
+pub struct TopicServiceError;

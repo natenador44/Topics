@@ -1,13 +1,15 @@
 mod topics;
 
-#[cfg(feature = "postgres-repo-full")]
-use postgres_repository::PostgresRepo;
+use error_stack::{Result, ResultExt};
 
-use crate::app::services::topics::TopicService;
+use crate::{
+    app::{repository::file::FileRepo, services::topics::TopicService},
+    error::InitError,
+};
 
 #[derive(Debug)]
 pub struct Service<T> {
-    pub topic_service: TopicService<T>,
+    pub topics: TopicService<T>,
 }
 
 impl<T> Clone for Service<T>
@@ -16,14 +18,19 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            topic_service: self.topic_service.clone(),
+            topics: self.topics.clone(),
         }
     }
 }
 
-#[cfg(feature = "postgres-repo-full")]
-pub fn build() -> Service<PostgresRepo> {
-    Service {
-        topic_service: TopicService::new(PostgresRepo::new()),
-    }
+#[derive(Debug, thiserror::Error)]
+#[error("failed to create service")]
+pub struct ServiceBuildError;
+
+pub fn build() -> Result<Service<FileRepo>, ServiceBuildError> {
+    Ok(Service {
+        topics: TopicService::new(
+            FileRepo::init(tokio::runtime::Handle::current()).change_context(ServiceBuildError)?,
+        ),
+    })
 }

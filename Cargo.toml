@@ -1,5 +1,5 @@
 [workspace]
-members = [ "postgres-repository", "repository","topic_service"]
+members = ["topic_service"]
 resolver = "3"
 
 [workspace.dependencies]

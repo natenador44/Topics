@@ -4,7 +4,6 @@ use axum::{
     response::IntoResponse,
     routing::{delete, post, put},
 };
-use repository::Repository;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{Level, instrument};
@@ -13,6 +12,7 @@ use utoipa_axum::router::OpenApiRouter;
 
 use crate::app::{
     models::{EntityId, TopicId, TopicSetId},
+    repository::Repository,
     state::AppState,
 };
 

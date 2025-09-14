@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 pub type TopicId = Uuid;
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
 pub struct Topic {
-    id: Uuid,
-    name: String,
-    description: String,
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
 }

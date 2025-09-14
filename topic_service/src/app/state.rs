@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use axum::extract::FromRef;
-use repository::Repository;
 
-use crate::app::services::Service;
+use crate::app::{repository::Repository, services::Service};
 
 #[derive(Clone)]
 pub struct AppState<T> {

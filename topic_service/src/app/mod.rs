@@ -9,6 +9,7 @@ use tracing::info;
 
 mod models;
 mod pagination;
+mod repository;
 mod routes;
 mod services;
 mod state;
@@ -16,7 +17,7 @@ mod state;
 pub async fn run() -> Result<(), InitError> {
     let listener = build_listener().await?;
 
-    let services = services::build();
+    let services = services::build().change_context(InitError::Service)?; // this error message is going to be redundant, fix later
     let app_state = AppState::new(services);
 
     let routes = routes::build(app_state);

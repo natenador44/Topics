@@ -4,7 +4,6 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
-use repository::Repository;
 use serde::Deserialize;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
@@ -13,6 +12,7 @@ use utoipa_axum::router::OpenApiRouter;
 use crate::app::{
     models::{Identifier, IdentifierId, TopicId},
     pagination::Pagination,
+    repository::Repository,
     state::AppState,
 };
 

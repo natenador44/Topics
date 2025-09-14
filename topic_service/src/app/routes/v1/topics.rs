@@ -3,13 +3,12 @@ use std::fmt::Debug;
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::{self, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post, put},
 };
-use repository::Repository;
 use serde::Deserialize;
-use tracing::{Level, error, instrument};
+use tracing::{Level, info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 use uuid::Uuid;
@@ -18,10 +17,11 @@ use crate::{
     app::{
         models::{Topic, TopicId},
         pagination::Pagination,
+        repository::Repository,
         services::Service,
         state::AppState,
     },
-    error::ServiceError,
+    error::{ServiceError, TopicServiceError},
 };
 
 #[derive(OpenApi)]
@@ -60,7 +60,6 @@ where
 
 /// Query and filter for topics. Can specify pagination (page and page_size) to limit results returned.
 /// Can also specify `SearchCriteria` to further reduce results based on name, description, or more.
-#[instrument(skip(service), ret)]
 #[utoipa::path(
     get,
     path = TOPIC_SEARCH_PATH,
@@ -76,30 +75,31 @@ where
     )
 )]
 // #[axum::debug_handler]
+// ideally I could return error_stack::Report as the error and debug log via instrument
+#[instrument(skip_all, ret, err(Debug), fields(
+    req.page = pagination.page,
+    req.page_size = pagination.page_size,
+    req.filter.name = search.name,
+    req.filter.desc = search.description
+))]
 pub async fn search_topics<T>(
     State(service): State<Service<T>>,
     Query(pagination): Query<Pagination>,
     Query(search): Query<TopicSearch>,
-) -> Result<Response, ServiceError>
+) -> Result<Response, ServiceError<TopicServiceError>>
 where
     T: Repository + Debug,
 {
-    let result = service.topic_service.search(
-        search.name.as_deref(),
-        search.description.as_deref(),
-        pagination,
-    );
+    info!("searching for topics..");
+    let topics = service
+        .topics
+        .search(search.name, search.description, pagination)
+        .await?;
 
-    match result {
-        Ok(topics) if topics.is_empty() => Ok(StatusCode::NO_CONTENT.into_response()),
-        Ok(topics) => Ok(Json::<Vec<Topic>>(topics).into_response()),
-        Err(e) => {
-            error!(
-                "failed to search for topics: {:?}",
-                e.change_context(ServiceError)
-            );
-            Err(ServiceError)
-        }
+    if topics.is_empty() {
+        Ok(StatusCode::NO_CONTENT.into_response())
+    } else {
+        Ok(Json(topics).into_response())
     }
 }
 

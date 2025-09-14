@@ -1,9 +1,8 @@
 use const_format::formatcp;
-use repository::Repository;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
-use crate::app::state::AppState;
+use crate::app::{repository::Repository, state::AppState};
 
 mod identifiers;
 mod sets;

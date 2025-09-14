@@ -8,7 +8,6 @@ const fn default_page() -> usize {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct Pagination {
     #[serde(default = "default_page")]
-    // #[serde(deserialize_with = "parse_page")]
     pub page: usize,
     pub page_size: Option<usize>,
 }

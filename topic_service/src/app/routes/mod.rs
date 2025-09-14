@@ -1,10 +1,9 @@
 use axum::Router;
-use repository::Repository;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::app::state::AppState;
+use crate::app::{repository::Repository, state::AppState};
 
 mod v1;
 
