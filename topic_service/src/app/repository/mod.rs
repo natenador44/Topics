@@ -26,6 +26,8 @@ pub enum TopicRepoError {
     Create,
     #[error("failed to delete topic")]
     Delete,
+    #[error("failed to update topic")]
+    Update,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,6 +57,13 @@ pub trait TopicRepository {
     ) -> impl Future<Output = Result<TopicId, TopicRepoError>> + Send;
 
     fn delete(&self, topic_id: TopicId) -> impl Future<Output = Result<(), TopicRepoError>> + Send;
+
+    fn update(
+        &self,
+        topic_id: TopicId,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> impl Future<Output = Result<Option<Topic>, TopicRepoError>> + Send;
 }
 
 #[cfg_attr(test, mockall::automock)]

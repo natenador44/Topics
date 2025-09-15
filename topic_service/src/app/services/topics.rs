@@ -20,6 +20,8 @@ pub struct TopicService<T> {
 
 impl<T> TopicService<T> {}
 
+impl<T> TopicService<T> {}
+
 impl<T> Clone for TopicService<T>
 where
     T: Clone,
@@ -96,6 +98,20 @@ impl<T: Repository> TopicService<T> {
         self.repo
             .topics()
             .delete(topic_id)
+            .await
+            .change_context(TopicServiceError)
+    }
+
+    #[instrument(skip_all, ret(level = "debug"), name = "service#update")]
+    pub async fn update(
+        &self,
+        topic_id: TopicId,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<Option<Topic>, TopicServiceError> {
+        self.repo
+            .topics()
+            .update(topic_id, name, description)
             .await
             .change_context(TopicServiceError)
     }

@@ -82,6 +82,15 @@ impl TopicRepository for MockTopicRepoWrapper {
     async fn delete(&self, topic_id: TopicId) -> Result<(), TopicRepoError> {
         self.0.delete(topic_id).await
     }
+
+    async fn update(
+        &self,
+        topic_id: TopicId,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<Option<Topic>, TopicRepoError> {
+        self.0.update(topic_id, name, description).await
+    }
 }
 
 #[derive(Debug, Clone)]

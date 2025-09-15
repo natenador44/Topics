@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use axum::routing::patch;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -25,12 +26,18 @@ use crate::{
 };
 
 #[derive(OpenApi)]
-#[openapi(paths(search_topics, get_topic, create_topic, delete_topic, update_topic,))]
+#[openapi(paths(search_topics, get_topic, create_topic, delete_topic, patch_topic,))]
 pub struct ApiDoc;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicRequest {
     name: String,
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TopicPatchRequest {
+    name: Option<String>,
     description: Option<String>,
 }
 
@@ -44,7 +51,7 @@ const TOPIC_SEARCH_PATH: &str = "/";
 const TOPIC_GET_PATH: &str = "/{topic_id}";
 const TOPIC_CREATE_PATH: &str = "/";
 const TOPIC_DELETE_PATH: &str = "/{topic_id}";
-const TOPIC_UPDATE_PATH: &str = "/{topic_id}";
+const TOPIC_PATCH_PATH: &str = "/{topic_id}";
 
 pub fn routes<T>() -> OpenApiRouter<AppState<T>>
 where
@@ -55,7 +62,7 @@ where
         .route(TOPIC_GET_PATH, get(get_topic))
         .route(TOPIC_CREATE_PATH, post(create_topic))
         .route(TOPIC_DELETE_PATH, delete(delete_topic))
-        .route(TOPIC_UPDATE_PATH, put(update_topic))
+        .route(TOPIC_PATCH_PATH, patch(patch_topic))
 }
 
 /// Query and filter for topics. Can specify pagination (page and page_size) to limit results returned.
@@ -175,23 +182,35 @@ where
 }
 
 /// Update the topic associated with the given id using the given information.
-#[instrument(level=Level::DEBUG)]
 #[utoipa::path(
-    put,
-    path = TOPIC_UPDATE_PATH,
+    patch,
+    path = TOPIC_PATCH_PATH,
     responses(
-        (status = OK, description = "The topic was successfully updated", body = Topic),
+        (status = OK, description = "The topic was successfully patched", body = Topic),
         (status = NOT_FOUND, description = "The topic was not found so could not be updated"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The TopicId to delete")
+        ("topic_id" = Uuid, Path, description = "The TopicId to patch")
     ),
-    request_body = TopicRequest,
+    request_body = TopicPatchRequest,
 )]
-pub async fn update_topic(
+#[instrument(skip(service), ret, err(Debug))]
+pub async fn patch_topic<T>(
+    State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
-    Json(topic): Json<TopicRequest>,
-) -> impl IntoResponse {
+    Json(topic): Json<TopicPatchRequest>,
+) -> Result<Response, ServiceError<TopicServiceError>>
+where
+    T: Repository + Debug,
+{
+    let updated_topic = service
+        .topics
+        .update(topic_id, topic.name, topic.description)
+        .await?;
+
+    Ok(updated_topic
+        .map(|t| Json(t).into_response())
+        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
 // TODO do we want a PATCH?

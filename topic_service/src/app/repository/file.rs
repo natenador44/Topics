@@ -7,20 +7,20 @@ use std::{
     },
 };
 
-use error_stack::{Result, ResultExt};
-use serde::{Deserialize, Serialize};
-use tokio::{
-    runtime::{Handle, Runtime},
-    sync::RwLock,
-};
-use tracing::{debug, error, info, instrument, span, Level, Metadata, Span};
-use tracing::field::{debug, display, ValueSet};
 use crate::app::models::TopicId;
 use crate::app::repository::TopicRepoError;
 use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
 };
+use error_stack::{Result, ResultExt};
+use serde::{Deserialize, Serialize};
+use tokio::{
+    runtime::{Handle, Runtime},
+    sync::RwLock,
+};
+use tracing::field::{ValueSet, debug, display};
+use tracing::{Level, Metadata, Span, debug, error, info, instrument, span};
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let app_dir = PathBuf::from(
@@ -38,7 +38,9 @@ static TOPICS_FILE: LazyLock<PathBuf> = LazyLock::new(|| APP_DIR.join("topics.js
 
 #[derive(Debug)]
 enum TopicUpdateType {
-    Create, Update, Delete
+    Create,
+    Update,
+    Delete,
 }
 #[derive(Debug)]
 struct TopicUpdate {
@@ -75,7 +77,12 @@ fn handle_topic_updates(topics: Arc<RwLock<Vec<Topic>>>, rc: Receiver<TopicUpdat
     loop {
         match rc.recv() {
             Ok(update) => {
-                let span = span!(Level::INFO, "topic_update", id = display(update.id), ty = debug(update.ty));
+                let span = span!(
+                    Level::INFO,
+                    "topic_update",
+                    id = display(update.id),
+                    ty = debug(update.ty)
+                );
                 let _guard = span.enter();
                 info!("topic update received");
                 let topics = topics.blocking_read();
@@ -122,7 +129,10 @@ pub struct FileTopicRepo {
 impl FileTopicRepo {
     #[instrument(skip_all)]
     fn send_update(&self, topic_id: TopicId, update_type: TopicUpdateType) {
-        if let Err(e) = self.topic_updates.send(TopicUpdate { id: topic_id, ty: update_type }) {
+        if let Err(e) = self.topic_updates.send(TopicUpdate {
+            id: topic_id,
+            ty: update_type,
+        }) {
             error!("failed to send topic update: {e:?}");
         }
     }
@@ -180,6 +190,32 @@ impl TopicRepository for FileTopicRepo {
         topics.retain(|t| t.id != topic_id);
         self.send_update(topic_id, TopicUpdateType::Delete);
         Ok(())
+    }
+
+    #[instrument(skip_all, ret(level = "debug"), name = "repo#update")]
+    async fn update(
+        &self,
+        topic_id: TopicId,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<Option<Topic>, TopicRepoError> {
+        let mut topics = self.topics.write().await;
+
+        let Some(topic) = topics.iter_mut().find(|t| t.id == topic_id) else {
+            return Ok(None);
+        };
+
+        if let Some(name) = name {
+            topic.name = name;
+        }
+
+        if let Some(description) = description {
+            topic.description = Some(description);
+        }
+
+        self.send_update(topic_id, TopicUpdateType::Update);
+
+        Ok(Some(topic.clone()))
     }
 }
 

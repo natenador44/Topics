@@ -388,6 +388,96 @@ async fn delete_returns_internal_server_error_if_repo_returns_error() {
     response.assert_status_internal_server_error()
 }
 
+#[tokio::test]
+async fn update_returns_ok_and_updated_topic_if_no_error() {
+    let new_name = String::from("different name");
+    let new_desc = String::from("different description");
+    let id = TopicId::now_v7();
+    let updated_topic = Topic::new(id, new_name.clone(), Some(new_desc.clone()));
+
+    let mut topic_repo = MockTopicRepository::new();
+
+    topic_repo
+        .expect_update()
+        .return_once(return_scenario::update::success(updated_topic.clone()));
+
+    let response = run_patch_endpoint(
+        &format!("/api/v1/topics/{id}"),
+        topic_repo,
+        &json!({
+            "name": new_name,
+            "description": new_desc,
+        }),
+    )
+    .await;
+
+    response.assert_status_ok();
+    response.assert_json(&updated_topic);
+}
+
+#[tokio::test]
+async fn update_returns_bad_request_if_id_is_invalid() {
+    let request_id = "bad_id";
+
+    let topic_repo = MockTopicRepository::new();
+
+    let response = run_patch_endpoint(
+        &format!("/api/v1/topics/{request_id}"),
+        topic_repo,
+        json!({
+            "name": "different name",
+            "description": "different description",
+        }),
+    )
+    .await;
+
+    response.assert_status_bad_request();
+}
+
+#[tokio::test]
+async fn update_returns_internal_server_error_if_repo_returns_error() {
+    let request_id = TopicId::now_v7();
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_update()
+        .return_once(return_scenario::update::error);
+
+    let response = run_patch_endpoint(
+        &format!("/api/v1/topics/{request_id}"),
+        topic_repo,
+        json!({
+            "name": "different name",
+            "description": "different description",
+        }),
+    )
+    .await;
+
+    response.assert_status_internal_server_error()
+}
+
+#[tokio::test]
+async fn update_returns_not_found_if_topic_id_does_not_exist() {
+    let id = TopicId::now_v7();
+
+    let mut topic_repo = MockTopicRepository::new();
+
+    topic_repo
+        .expect_update()
+        .return_once(return_scenario::update::not_found);
+
+    let response = run_patch_endpoint(
+        &format!("/api/v1/topics/{id}"),
+        topic_repo,
+        &json!({
+            "name": "different name",
+            "description": "different description",
+        }),
+    )
+    .await;
+
+    response.assert_status_not_found();
+}
+
 async fn run_get_endpoint(path: &str, topic_repo: MockTopicRepository) -> TestResponse {
     let server = init_test_server(topic_repo);
 
@@ -401,6 +491,15 @@ where
     let server = init_test_server(topic_repo);
 
     server.post(path).json(&body).await
+}
+
+async fn run_patch_endpoint<T>(path: &str, topic_repo: MockTopicRepository, body: T) -> TestResponse
+where
+    T: Serialize,
+{
+    let server = init_test_server(topic_repo);
+
+    server.patch(path).json(&body).await
 }
 
 async fn run_delete_endpoint(path: &str, topic_repo: MockTopicRepository) -> TestResponse {
@@ -515,6 +614,38 @@ mod return_scenario {
 
         pub fn error<'a>(_: TopicId) -> BoxFuture<'a, Result<(), TopicRepoError>> {
             async { Err(report!(TopicRepoError::Delete)) }.boxed()
+        }
+    }
+
+    pub mod update {
+        use super::*;
+        use crate::app::models::TopicId;
+        use uuid::Uuid;
+
+        pub fn success<'a>(
+            topic: Topic,
+        ) -> impl FnOnce(
+            TopicId,
+            Option<String>,
+            Option<String>,
+        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+            |_, _, _| async { Ok(Some(topic)) }.boxed()
+        }
+
+        pub fn not_found<'a>(
+            _: TopicId,
+            _: Option<String>,
+            _: Option<String>,
+        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+            async { Ok(None) }.boxed()
+        }
+
+        pub fn error<'a>(
+            _: TopicId,
+            _: Option<String>,
+            _: Option<String>,
+        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+            async { Err(report!(TopicRepoError::Update)) }.boxed()
         }
     }
 }
