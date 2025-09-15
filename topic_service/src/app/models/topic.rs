@@ -10,3 +10,17 @@ pub struct Topic {
     pub name: String,
     pub description: String,
 }
+
+impl Topic {
+    pub fn new<N, D>(name: N, description: D) -> Self
+    where
+        N: Into<String>,
+        D: Into<String>,
+    {
+        Self {
+            id: Uuid::now_v7(),
+            name: name.into(),
+            description: description.into(),
+        }
+    }
+}

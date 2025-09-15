@@ -1,11 +1,10 @@
 mod topics;
 
+pub use topics::TopicService;
+
 use error_stack::{Result, ResultExt};
 
-use crate::{
-    app::{repository::file::FileRepo, services::topics::TopicService},
-    error::InitError,
-};
+use crate::app::repository::file::FileRepo;
 
 #[derive(Debug)]
 pub struct Service<T> {

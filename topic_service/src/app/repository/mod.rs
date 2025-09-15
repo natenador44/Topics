@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use error_stack::{Result, report};
+use error_stack::Result;
 
-use crate::{app::models::Topic, error::InitError};
+use crate::app::models::Topic;
 
 pub mod file;
 
@@ -28,6 +28,7 @@ pub enum TopicFilter {
     Description(String),
 }
 
+#[cfg_attr(test, mockall::automock)]
 pub trait TopicRepository {
     fn search(
         &self,
@@ -37,6 +38,8 @@ pub trait TopicRepository {
     ) -> impl std::future::Future<Output = Result<Vec<Topic>, TopicRepoError>> + Send;
 }
 
+#[cfg_attr(test, mockall::automock)]
 pub trait IdentifierRepository {}
 
+#[cfg_attr(test, mockall::automock)]
 pub trait SetRepository {}

@@ -1,7 +1,4 @@
-use crate::{
-    app::{services::Service, state::AppState},
-    error::InitError,
-};
+use crate::{app::state::AppState, error::InitError};
 use axum::Router;
 use error_stack::{Result, ResultExt};
 use tokio::net::TcpListener;
@@ -13,6 +10,9 @@ mod repository;
 mod routes;
 mod services;
 mod state;
+
+#[cfg(test)]
+mod tests;
 
 pub async fn run() -> Result<(), InitError> {
     let listener = build_listener().await?;
