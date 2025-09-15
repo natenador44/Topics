@@ -22,7 +22,7 @@ pub enum TopicRepoError {
     Search,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TopicFilter {
     Name(String),
     Description(String),

@@ -1,3 +1,5 @@
+//! All tests in this module are intended to test the contract made by the API,
+//! e.g. return codes, handling query parameters, handling path parameters.
 use error_stack::Result;
 use std::{ops::Deref, sync::Arc};
 
