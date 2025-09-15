@@ -70,6 +70,10 @@ impl TopicRepository for MockTopicRepoWrapper {
     async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicRepoError> {
         self.0.get(topic_id).await
     }
+
+    async fn create(&self, name: String, description: Option<String>) -> Result<TopicId, TopicRepoError> {
+        self.0.create(name, description).await
+    }
 }
 
 #[derive(Debug, Clone)]

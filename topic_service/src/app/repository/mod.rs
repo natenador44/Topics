@@ -22,6 +22,8 @@ pub enum TopicRepoError {
     Search,
     #[error("error occurred while finding topic")]
     Get,
+    #[error("failed to create new topic")]
+    Create,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,6 +45,12 @@ pub trait TopicRepository {
         &self,
         topic_id: TopicId
     ) -> impl Future<Output = Result<Option<Topic>, TopicRepoError>> + Send;
+    
+    fn create(
+        &self,
+        name: String,
+        description: Option<String>,
+    ) -> impl Future<Output = Result<TopicId, TopicRepoError>> + Send;
 }
 
 #[cfg_attr(test, mockall::automock)]

@@ -129,7 +129,6 @@ where
 }
 
 /// Create a new Topic and return its ID
-#[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     post,
     path = TOPIC_CREATE_PATH,
@@ -138,8 +137,12 @@ where
     ),
     request_body = TopicRequest
 )]
-pub async fn create_topic(Json(topic): Json<TopicRequest>) -> impl IntoResponse {
-    Json(Uuid::now_v7()) // not sure if this should be JSON but may as well be consistent right now
+#[instrument(skip_all, ret, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
+pub async fn create_topic<T>(State(service): State<Service<T>>, Json(topic): Json<TopicRequest>) -> Result<(StatusCode, Json<Uuid>), ServiceError<TopicServiceError>>
+    where T: Repository + Debug,
+{
+    let new_topic_id = service.topics.create(topic.name, topic.description).await?;
+    Ok((StatusCode::CREATED, Json(new_topic_id)))
 }
 
 /// Delete the topic associated with the given id

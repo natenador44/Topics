@@ -9,8 +9,11 @@ use crate::app::{
 use axum::http::StatusCode;
 use axum_test::{TestResponse, TestServer};
 use mockall::predicate;
+use serde::Serialize;
+use serde_json::json;
 use uuid::Uuid;
 use crate::app;
+use crate::app::models::TopicId;
 
 const DEFAULT_NAME: &str = "topic1";
 const DEFAULT_DESC: &str = "description1";
@@ -253,10 +256,69 @@ async fn get_returns_bad_request_if_id_is_not_uuid() {
 
     response.assert_status_bad_request();
 }
+
+#[tokio::test]
+async fn create_returns_created_status_and_new_id_if_creation_is_successful() {
+    let topic_id = TopicId::now_v7();
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo.expect_create()
+        .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(Some(DEFAULT_DESC.to_string())))
+        .once()
+        .return_once(return_scenario::create::success(topic_id));
+
+    let response = run_post_endpoint("/api/v1/topics", topic_repo, &json!({
+        "name": DEFAULT_NAME,
+        "description": DEFAULT_DESC,
+    })).await;
+
+    response.assert_status(StatusCode::CREATED);
+    response.assert_json(&topic_id);
+}
+
+#[tokio::test]
+async fn create_returns_internal_server_error_if_repo_returns_error() {
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo.expect_create()
+        .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(Some(DEFAULT_DESC.to_string())))
+        .once()
+        .return_once(return_scenario::create::error);
+
+    let response = run_post_endpoint("/api/v1/topics", topic_repo, &json!({
+        "name": DEFAULT_NAME,
+        "description": DEFAULT_DESC,
+    })).await;
+
+    response.assert_status_internal_server_error();
+}
+
+#[tokio::test]
+async fn create_description_is_optional() {
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo.expect_create()
+        .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(None))
+        .once()
+        .return_once(return_scenario::create::success(Uuid::now_v7()));
+
+    let response = run_post_endpoint("/api/v1/topics", topic_repo, &json!({
+        "name": DEFAULT_NAME,
+    })).await;
+
+    response.assert_status_success();
+}
+
 async fn run_get_endpoint(path: &str, topic_repo: MockTopicRepository) -> TestResponse {
     let server = init_test_server(topic_repo);
 
     server.get(path).await
+}
+
+async fn run_post_endpoint<T>(path: &str, topic_repo: MockTopicRepository, body: T) -> TestResponse
+    where T: Serialize
+{
+    let server = init_test_server(topic_repo);
+
+    server.post(path).json(&body).await
 }
 
 fn init_test_server(topic_repo: MockTopicRepository) -> TestServer {
@@ -334,6 +396,19 @@ mod return_scenario {
             TopicId
         ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
             move |_| async move { Err(report!(TopicRepoError::Get)) }.boxed()
+        }
+    }
+
+    pub mod create {
+        use crate::app::models::TopicId;
+        use super::*;
+
+        pub fn success<'a>(topic_id: TopicId) -> impl FnOnce(String, Option<String>) -> BoxFuture<'a, Result<TopicId, TopicRepoError>> {
+            move |_,_| async move { Ok(topic_id) }.boxed()
+        }
+
+        pub fn error<'a>(_: String, _: Option<String>) -> BoxFuture<'a, Result<TopicId, TopicRepoError>> {
+            async { Err(report!(TopicRepoError::Create)) }.boxed()
         }
     }
 }

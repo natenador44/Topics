@@ -15,12 +15,12 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument};
 
+use crate::app::models::TopicId;
+use crate::app::repository::TopicRepoError;
 use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
 };
-use crate::app::models::TopicId;
-use crate::app::repository::TopicRepoError;
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let app_dir = PathBuf::from(
@@ -60,10 +60,12 @@ impl FileRepo {
     }
 }
 
+#[instrument(skip_all)]
 fn handle_topic_updates(topics: Arc<RwLock<Vec<Topic>>>, rc: Receiver<()>) {
     loop {
         match rc.recv() {
             Ok(_) => {
+                info!("topic updates received");
                 let topics = topics.blocking_read();
                 if let Err(e) = save_data(&TOPICS_FILE, &*topics) {
                     error!("failed to apply topic updates: {e:?}");
@@ -85,7 +87,10 @@ impl Repository for FileRepo {
     type SetRepo = FileSetRepo;
 
     fn topics(&self) -> Self::TopicRepo {
-        FileTopicRepo(Arc::clone(&self.topics))
+        FileTopicRepo {
+            topics: Arc::clone(&self.topics),
+            topic_updates: self.topic_updates.clone(),
+        }
     }
 
     fn identifiers(&self) -> Self::IdentifierRepo {
@@ -97,16 +102,20 @@ impl Repository for FileRepo {
     }
 }
 
-pub struct FileTopicRepo(Arc<RwLock<Vec<Topic>>>);
+pub struct FileTopicRepo {
+    topics: Arc<RwLock<Vec<Topic>>>,
+    topic_updates: Sender<()>,
+}
+
 impl TopicRepository for FileTopicRepo {
-    #[instrument(skip_all, name = "repo_search")]
+    #[instrument(skip_all, ret(level = "debug"), name = "repo#search")]
     async fn search(
         &self,
         page: usize,
         page_size: usize,
         filters: Vec<TopicFilter>,
-    ) -> Result<Vec<Topic>, super::TopicRepoError> {
-        let topics = self.0.read().await;
+    ) -> Result<Vec<Topic>, TopicRepoError> {
+        let topics = self.topics.read().await;
 
         let page = paginate_list(&topics, page, page_size);
 
@@ -123,9 +132,23 @@ impl TopicRepository for FileTopicRepo {
         Ok(filtered)
     }
 
+    #[instrument(skip_all, ret(level = "debug"), name = "repo#get_by_id")]
     async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicRepoError> {
-        let topics = self.0.read().await;
+        let topics = self.topics.read().await;
         Ok(topics.iter().find(|t| t.id == topic_id).cloned())
+    }
+
+    #[instrument(skip_all, ret(level = "debug"), name = "repo#create")]
+    async fn create(&self, name: String, description: Option<String>) -> Result<TopicId, TopicRepoError> {
+        let new_id = TopicId::now_v7();
+        let new_topic = Topic::new(new_id, name, description);
+        let mut topics = self.topics.write().await;
+        topics.push(new_topic);
+        if let Err(e) = self.topic_updates.send(()) {
+            error!("failed to send topic update: {e}");
+        }
+
+        Ok(new_id)
     }
 }
 
@@ -136,7 +159,10 @@ fn filter_topic(topic: &Topic, filters: &[TopicFilter]) -> bool {
 
     filters.iter().any(|f| match f {
         TopicFilter::Name(n) => topic.name.contains(n),
-        TopicFilter::Description(d) => topic.description.contains(d),
+        TopicFilter::Description(d) => topic
+            .description
+            .as_ref()
+            .map_or(false, |desc| desc.contains(d)),
     })
 }
 

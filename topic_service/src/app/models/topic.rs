@@ -8,30 +8,28 @@ pub type TopicId = Uuid;
 pub struct Topic {
     pub id: Uuid,
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
 }
 
 impl PartialEq for Topic {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id  
+        self.id == other.id
     }
 }
 
 impl Topic {
-    pub fn new<N, D>(id: TopicId, name: N, description: D) -> Topic
-    where
-        N: Into<String>,
-        D: Into<String>,
+    pub fn new(id: TopicId, name: String, description: Option<String>) -> Topic
     {
         Self {
-            id, name: name.into(), description: description.into(),
+            id, name, description,
         }
     }
+
     pub fn new_random_id<N, D>(name: N, description: D) -> Self
     where
         N: Into<String>,
         D: Into<String>,
     {
-        Self::new(Uuid::now_v7(), name, description)
+        Self::new(Uuid::now_v7(), name.into(), Some(description.into()))
     }
 }
