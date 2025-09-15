@@ -139,7 +139,11 @@ impl TopicRepository for FileTopicRepo {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "repo#create")]
-    async fn create(&self, name: String, description: Option<String>) -> Result<TopicId, TopicRepoError> {
+    async fn create(
+        &self,
+        name: String,
+        description: Option<String>,
+    ) -> Result<TopicId, TopicRepoError> {
         let new_id = TopicId::now_v7();
         let new_topic = Topic::new(new_id, name, description);
         let mut topics = self.topics.write().await;
@@ -149,6 +153,16 @@ impl TopicRepository for FileTopicRepo {
         }
 
         Ok(new_id)
+    }
+
+    #[instrument(skip_all, ret(level = "debug"), name = "repo#delete")]
+    async fn delete(&self, topic_id: TopicId) -> Result<(), TopicRepoError> {
+        let mut topics = self.topics.write().await;
+        topics.retain(|t| t.id != topic_id);
+        if let Err(e) = self.topic_updates.send(()) {
+            error!("failed to send topic update: {e}");
+        }
+        Ok(())
     }
 }
 

@@ -125,7 +125,9 @@ where
 {
     let topic = service.topics.get(topic_id).await?;
 
-    Ok(topic.map(|t| Json(t).into_response()).unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
+    Ok(topic
+        .map(|t| Json(t).into_response())
+        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
 /// Create a new Topic and return its ID
@@ -138,15 +140,18 @@ where
     request_body = TopicRequest
 )]
 #[instrument(skip_all, ret, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
-pub async fn create_topic<T>(State(service): State<Service<T>>, Json(topic): Json<TopicRequest>) -> Result<(StatusCode, Json<Uuid>), ServiceError<TopicServiceError>>
-    where T: Repository + Debug,
+pub async fn create_topic<T>(
+    State(service): State<Service<T>>,
+    Json(topic): Json<TopicRequest>,
+) -> Result<(StatusCode, Json<Uuid>), ServiceError<TopicServiceError>>
+where
+    T: Repository + Debug,
 {
     let new_topic_id = service.topics.create(topic.name, topic.description).await?;
     Ok((StatusCode::CREATED, Json(new_topic_id)))
 }
 
 /// Delete the topic associated with the given id
-#[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     delete,
     path = TOPIC_DELETE_PATH,
@@ -157,8 +162,16 @@ pub async fn create_topic<T>(State(service): State<Service<T>>, Json(topic): Jso
         ("topic_id" = Uuid, Path, description = "The ID of the topic to delete to delete")
     )
 )]
-pub async fn delete_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+#[instrument(skip(service), ret, err(Debug))]
+pub async fn delete_topic<T>(
+    State(service): State<Service<T>>,
+    Path(topic_id): Path<TopicId>,
+) -> Result<StatusCode, ServiceError<TopicServiceError>>
+where
+    T: Repository + Debug,
+{
+    service.topics.delete(topic_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Update the topic associated with the given id using the given information.

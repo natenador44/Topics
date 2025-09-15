@@ -24,6 +24,8 @@ pub enum TopicRepoError {
     Get,
     #[error("failed to create new topic")]
     Create,
+    #[error("failed to delete topic")]
+    Delete,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,17 +42,19 @@ pub trait TopicRepository {
         page_size: usize,
         filters: Vec<TopicFilter>, // TODO find a way to not allocate memory with each request
     ) -> impl Future<Output = Result<Vec<Topic>, TopicRepoError>> + Send;
-    
+
     fn get(
         &self,
-        topic_id: TopicId
+        topic_id: TopicId,
     ) -> impl Future<Output = Result<Option<Topic>, TopicRepoError>> + Send;
-    
+
     fn create(
         &self,
         name: String,
         description: Option<String>,
     ) -> impl Future<Output = Result<TopicId, TopicRepoError>> + Send;
+
+    fn delete(&self, topic_id: TopicId) -> impl Future<Output = Result<(), TopicRepoError>> + Send;
 }
 
 #[cfg_attr(test, mockall::automock)]

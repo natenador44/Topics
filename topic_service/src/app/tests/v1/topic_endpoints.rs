@@ -1,3 +1,5 @@
+use crate::app;
+use crate::app::models::TopicId;
 use crate::app::{
     models::Topic,
     repository::{MockTopicRepository, TopicFilter},
@@ -12,8 +14,6 @@ use mockall::predicate;
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
-use crate::app;
-use crate::app::models::TopicId;
 
 const DEFAULT_NAME: &str = "topic1";
 const DEFAULT_DESC: &str = "description1";
@@ -36,7 +36,11 @@ async fn search_default_pagination() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
         .expect_search()
-        .with(predicate::eq(1), predicate::eq(app::services::DEFAULT_TOPIC_SEARCH_PAGE_SIZE), predicate::eq(vec![]))
+        .with(
+            predicate::eq(1),
+            predicate::eq(app::services::DEFAULT_TOPIC_SEARCH_PAGE_SIZE),
+            predicate::eq(vec![]),
+        )
         .once()
         .return_once(return_scenario::search::empty);
 
@@ -66,7 +70,11 @@ async fn unknown_params_are_ignored() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
         .expect_search()
-        .with(predicate::eq(1), predicate::eq(app::services::DEFAULT_TOPIC_SEARCH_PAGE_SIZE), predicate::eq(vec![]))
+        .with(
+            predicate::eq(1),
+            predicate::eq(app::services::DEFAULT_TOPIC_SEARCH_PAGE_SIZE),
+            predicate::eq(vec![]),
+        )
         .once()
         .return_once(return_scenario::search::empty);
 
@@ -74,7 +82,6 @@ async fn unknown_params_are_ignored() {
 
     response.assert_status_success();
 }
-
 
 #[tokio::test]
 async fn search_page_param_is_taken_from_uri_query() {
@@ -212,7 +219,10 @@ async fn search_returns_internal_server_error_if_repo_returns_error() {
 async fn get_returns_not_found_if_no_topics_exist() {
     let id = Uuid::now_v7();
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_get().once().returning(return_scenario::get::not_found);
+    topic_repo
+        .expect_get()
+        .once()
+        .returning(return_scenario::get::not_found);
 
     let response = run_get_endpoint(&format!("/api/v1/topics/{id}"), topic_repo).await;
 
@@ -226,7 +236,11 @@ async fn get_returns_json_topic_and_ok_status_if_topic_found() {
     let request_id = Uuid::now_v7();
 
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_get().with(predicate::eq(request_id)).once().return_once(return_scenario::get::found(existing_topic.clone()));
+    topic_repo
+        .expect_get()
+        .with(predicate::eq(request_id))
+        .once()
+        .return_once(return_scenario::get::found(existing_topic.clone()));
 
     let response = run_get_endpoint(&format!("/api/v1/topics/{request_id}"), topic_repo).await;
 
@@ -239,7 +253,11 @@ async fn get_returns_internal_server_error_if_repo_error_occurs() {
     let request_id = Uuid::now_v7();
 
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_get().with(predicate::eq(request_id)).once().return_once(return_scenario::get::error());
+    topic_repo
+        .expect_get()
+        .with(predicate::eq(request_id))
+        .once()
+        .return_once(return_scenario::get::error());
 
     let response = run_get_endpoint(&format!("/api/v1/topics/{request_id}"), topic_repo).await;
 
@@ -262,15 +280,24 @@ async fn create_returns_created_status_and_new_id_if_creation_is_successful() {
     let topic_id = TopicId::now_v7();
 
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_create()
-        .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(Some(DEFAULT_DESC.to_string())))
+    topic_repo
+        .expect_create()
+        .with(
+            predicate::eq(DEFAULT_NAME.to_string()),
+            predicate::eq(Some(DEFAULT_DESC.to_string())),
+        )
         .once()
         .return_once(return_scenario::create::success(topic_id));
 
-    let response = run_post_endpoint("/api/v1/topics", topic_repo, &json!({
-        "name": DEFAULT_NAME,
-        "description": DEFAULT_DESC,
-    })).await;
+    let response = run_post_endpoint(
+        "/api/v1/topics",
+        topic_repo,
+        &json!({
+            "name": DEFAULT_NAME,
+            "description": DEFAULT_DESC,
+        }),
+    )
+    .await;
 
     response.assert_status(StatusCode::CREATED);
     response.assert_json(&topic_id);
@@ -279,15 +306,24 @@ async fn create_returns_created_status_and_new_id_if_creation_is_successful() {
 #[tokio::test]
 async fn create_returns_internal_server_error_if_repo_returns_error() {
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_create()
-        .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(Some(DEFAULT_DESC.to_string())))
+    topic_repo
+        .expect_create()
+        .with(
+            predicate::eq(DEFAULT_NAME.to_string()),
+            predicate::eq(Some(DEFAULT_DESC.to_string())),
+        )
         .once()
         .return_once(return_scenario::create::error);
 
-    let response = run_post_endpoint("/api/v1/topics", topic_repo, &json!({
-        "name": DEFAULT_NAME,
-        "description": DEFAULT_DESC,
-    })).await;
+    let response = run_post_endpoint(
+        "/api/v1/topics",
+        topic_repo,
+        &json!({
+            "name": DEFAULT_NAME,
+            "description": DEFAULT_DESC,
+        }),
+    )
+    .await;
 
     response.assert_status_internal_server_error();
 }
@@ -295,16 +331,61 @@ async fn create_returns_internal_server_error_if_repo_returns_error() {
 #[tokio::test]
 async fn create_description_is_optional() {
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_create()
+    topic_repo
+        .expect_create()
         .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(None))
         .once()
         .return_once(return_scenario::create::success(Uuid::now_v7()));
 
-    let response = run_post_endpoint("/api/v1/topics", topic_repo, &json!({
-        "name": DEFAULT_NAME,
-    })).await;
+    let response = run_post_endpoint(
+        "/api/v1/topics",
+        topic_repo,
+        &json!({
+            "name": DEFAULT_NAME,
+        }),
+    )
+    .await;
 
     response.assert_status_success();
+}
+
+#[tokio::test]
+async fn delete_returns_no_content_if_no_error() {
+    let id = TopicId::now_v7();
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_delete()
+        .with(predicate::eq(id))
+        .return_once(return_scenario::delete::success);
+
+    let response = run_delete_endpoint(&format!("/api/v1/topics/{id}"), topic_repo).await;
+
+    response.assert_status(StatusCode::NO_CONTENT)
+}
+
+#[tokio::test]
+async fn delete_returns_bad_request_if_id_is_invalid() {
+    let request_id = "bad_id";
+
+    let topic_repo = MockTopicRepository::new();
+
+    let response = run_delete_endpoint(&format!("/api/v1/topics/{request_id}"), topic_repo).await;
+
+    response.assert_status_bad_request();
+}
+
+#[tokio::test]
+async fn delete_returns_internal_server_error_if_repo_returns_error() {
+    let id = TopicId::now_v7();
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_delete()
+        .with(predicate::eq(id))
+        .return_once(return_scenario::delete::error);
+
+    let response = run_delete_endpoint(&format!("/api/v1/topics/{id}"), topic_repo).await;
+
+    response.assert_status_internal_server_error()
 }
 
 async fn run_get_endpoint(path: &str, topic_repo: MockTopicRepository) -> TestResponse {
@@ -314,11 +395,18 @@ async fn run_get_endpoint(path: &str, topic_repo: MockTopicRepository) -> TestRe
 }
 
 async fn run_post_endpoint<T>(path: &str, topic_repo: MockTopicRepository, body: T) -> TestResponse
-    where T: Serialize
+where
+    T: Serialize,
 {
     let server = init_test_server(topic_repo);
 
     server.post(path).json(&body).await
+}
+
+async fn run_delete_endpoint(path: &str, topic_repo: MockTopicRepository) -> TestResponse {
+    let server = init_test_server(topic_repo);
+
+    server.delete(path).await
 }
 
 fn init_test_server(topic_repo: MockTopicRepository) -> TestServer {
@@ -378,37 +466,55 @@ mod return_scenario {
     }
 
     pub mod get {
-        use uuid::Uuid;
-        use crate::app::models::TopicId;
         use super::*;
+        use crate::app::models::TopicId;
+        use uuid::Uuid;
 
         pub fn not_found<'a>(_: Uuid) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
             async { Ok(None) }.boxed()
         }
 
-        pub fn found<'a>(topic: Topic) -> impl FnOnce(TopicId) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
-            |_| {
-                async { Ok(Some(topic)) }.boxed()
-            }
+        pub fn found<'a>(
+            topic: Topic,
+        ) -> impl FnOnce(TopicId) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+            |_| async { Ok(Some(topic)) }.boxed()
         }
 
-        pub fn error<'a>() -> impl FnOnce(
-            TopicId
-        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+        pub fn error<'a>()
+        -> impl FnOnce(TopicId) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
             move |_| async move { Err(report!(TopicRepoError::Get)) }.boxed()
         }
     }
 
     pub mod create {
-        use crate::app::models::TopicId;
         use super::*;
+        use crate::app::models::TopicId;
 
-        pub fn success<'a>(topic_id: TopicId) -> impl FnOnce(String, Option<String>) -> BoxFuture<'a, Result<TopicId, TopicRepoError>> {
-            move |_,_| async move { Ok(topic_id) }.boxed()
+        pub fn success<'a>(
+            topic_id: TopicId,
+        ) -> impl FnOnce(String, Option<String>) -> BoxFuture<'a, Result<TopicId, TopicRepoError>>
+        {
+            move |_, _| async move { Ok(topic_id) }.boxed()
         }
 
-        pub fn error<'a>(_: String, _: Option<String>) -> BoxFuture<'a, Result<TopicId, TopicRepoError>> {
+        pub fn error<'a>(
+            _: String,
+            _: Option<String>,
+        ) -> BoxFuture<'a, Result<TopicId, TopicRepoError>> {
             async { Err(report!(TopicRepoError::Create)) }.boxed()
+        }
+    }
+
+    pub mod delete {
+        use super::*;
+        use crate::app::models::TopicId;
+
+        pub fn success<'a>(_: TopicId) -> BoxFuture<'a, Result<(), TopicRepoError>> {
+            async { Ok(()) }.boxed()
+        }
+
+        pub fn error<'a>(_: TopicId) -> BoxFuture<'a, Result<(), TopicRepoError>> {
+            async { Err(report!(TopicRepoError::Delete)) }.boxed()
         }
     }
 }

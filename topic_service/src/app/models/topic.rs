@@ -18,10 +18,11 @@ impl PartialEq for Topic {
 }
 
 impl Topic {
-    pub fn new(id: TopicId, name: String, description: Option<String>) -> Topic
-    {
+    pub fn new(id: TopicId, name: String, description: Option<String>) -> Topic {
         Self {
-            id, name, description,
+            id,
+            name,
+            description,
         }
     }
 

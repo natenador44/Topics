@@ -3,6 +3,7 @@
 use error_stack::Result;
 use std::{ops::Deref, sync::Arc};
 
+use crate::app::models::TopicId;
 use crate::app::{
     models::Topic,
     repository::{
@@ -10,7 +11,6 @@ use crate::app::{
         Repository, SetRepository, TopicFilter, TopicRepoError, TopicRepository,
     },
 };
-use crate::app::models::TopicId;
 
 mod v1;
 
@@ -71,8 +71,16 @@ impl TopicRepository for MockTopicRepoWrapper {
         self.0.get(topic_id).await
     }
 
-    async fn create(&self, name: String, description: Option<String>) -> Result<TopicId, TopicRepoError> {
+    async fn create(
+        &self,
+        name: String,
+        description: Option<String>,
+    ) -> Result<TopicId, TopicRepoError> {
         self.0.create(name, description).await
+    }
+
+    async fn delete(&self, topic_id: TopicId) -> Result<(), TopicRepoError> {
+        self.0.delete(topic_id).await
     }
 }
 
