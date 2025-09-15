@@ -10,8 +10,9 @@ use crate::app::{
         Repository, SetRepository, TopicFilter, TopicRepoError, TopicRepository,
     },
 };
+use crate::app::models::TopicId;
 
-mod topic_endpoints;
+mod v1;
 
 #[derive(Debug, Clone)]
 struct MockRepo {
@@ -64,6 +65,10 @@ impl TopicRepository for MockTopicRepoWrapper {
         filters: Vec<TopicFilter>,
     ) -> Result<Vec<Topic>, TopicRepoError> {
         self.0.search(page, page_size, filters).await
+    }
+
+    async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicRepoError> {
+        self.0.get(topic_id).await
     }
 }
 

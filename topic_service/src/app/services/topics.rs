@@ -9,10 +9,16 @@ use crate::{
     },
     error::TopicServiceError,
 };
+use crate::app::models::TopicId;
+
+pub const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: usize = 25;
 
 #[derive(Debug)]
 pub struct TopicService<T> {
     repo: T,
+}
+
+impl<T> TopicService<T> {
 }
 
 impl<T> Clone for TopicService<T>
@@ -27,13 +33,12 @@ where
 }
 
 impl<T: Repository> TopicService<T> {
-    const PAGE_SIZE: usize = 25;
 
     pub fn new(repo: T) -> TopicService<T> {
         TopicService { repo }
     }
 
-    #[instrument(skip_all)]
+    #[instrument(skip_all, name = "service::search")]
     pub async fn search(
         &self,
         name: Option<String>,
@@ -42,7 +47,7 @@ impl<T: Repository> TopicService<T> {
     ) -> Result<Vec<Topic>, TopicServiceError> {
         let topic_repo = self.repo.topics();
         let page = pagination.page;
-        let page_size = pagination.page_size.unwrap_or(Self::PAGE_SIZE);
+        let page_size = pagination.page_size.unwrap_or(DEFAULT_TOPIC_SEARCH_PAGE_SIZE);
 
         let filters = match (name, description) {
             (Some(n), None) => vec![TopicFilter::Name(n)],
@@ -57,5 +62,12 @@ impl<T: Repository> TopicService<T> {
             .change_context(TopicServiceError)?;
 
         Ok(topics)
+    }
+    
+    #[instrument(skip_all, name = "service::get_by_id")]
+    pub async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicServiceError> {
+        let topic = self.repo.topics().get(topic_id).await
+            .change_context(TopicServiceError)?;
+        Ok(topic)
     }
 }

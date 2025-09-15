@@ -19,6 +19,8 @@ use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
 };
+use crate::app::models::TopicId;
+use crate::app::repository::TopicRepoError;
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let app_dir = PathBuf::from(
@@ -97,7 +99,7 @@ impl Repository for FileRepo {
 
 pub struct FileTopicRepo(Arc<RwLock<Vec<Topic>>>);
 impl TopicRepository for FileTopicRepo {
-    #[instrument(skip_all)]
+    #[instrument(skip_all, name = "repo_search")]
     async fn search(
         &self,
         page: usize,
@@ -119,6 +121,11 @@ impl TopicRepository for FileTopicRepo {
             .collect();
 
         Ok(filtered)
+    }
+
+    async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicRepoError> {
+        let topics = self.0.read().await;
+        Ok(topics.iter().find(|t| t.id == topic_id).cloned())
     }
 }
 

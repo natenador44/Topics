@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use error_stack::Result;
 
-use crate::app::models::Topic;
+use crate::app::models::{Topic, TopicId};
 
 pub mod file;
 
@@ -20,6 +20,8 @@ pub trait Repository: Clone + Send + Sync + Debug {
 pub enum TopicRepoError {
     #[error("failed to search topics")]
     Search,
+    #[error("error occurred while finding topic")]
+    Get,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -35,7 +37,12 @@ pub trait TopicRepository {
         page: usize,
         page_size: usize,
         filters: Vec<TopicFilter>, // TODO find a way to not allocate memory with each request
-    ) -> impl std::future::Future<Output = Result<Vec<Topic>, TopicRepoError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Topic>, TopicRepoError>> + Send;
+    
+    fn get(
+        &self,
+        topic_id: TopicId
+    ) -> impl Future<Output = Result<Option<Topic>, TopicRepoError>> + Send;
 }
 
 #[cfg_attr(test, mockall::automock)]

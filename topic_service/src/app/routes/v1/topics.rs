@@ -75,7 +75,6 @@ where
     )
 )]
 // #[axum::debug_handler]
-// ideally I could return error_stack::Report as the error and debug log via instrument
 #[instrument(skip_all, ret, err(Debug), fields(
     req.page = pagination.page,
     req.page_size = pagination.page_size,
@@ -104,7 +103,7 @@ where
 }
 
 /// Get the topic associated with the given id.
-#[instrument(level=Level::DEBUG)]
+// #[axum::debug_handler]
 #[utoipa::path(
     get,
     path = TOPIC_GET_PATH,
@@ -116,7 +115,18 @@ where
         ("topic_id" = Uuid, Path, description = "The TopicId to find"),
     )
 )]
-pub async fn get_topic(Path(topic_id): Path<TopicId>) -> impl IntoResponse {}
+#[instrument(skip(service), ret, err(Debug))]
+pub async fn get_topic<T>(
+    State(service): State<Service<T>>,
+    Path(topic_id): Path<TopicId>,
+) -> Result<Response, ServiceError<TopicServiceError>>
+where
+    T: Repository + Debug,
+{
+    let topic = service.topics.get(topic_id).await?;
+
+    Ok(topic.map(|t| Json(t).into_response()).unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
+}
 
 /// Create a new Topic and return its ID
 #[instrument(level=Level::DEBUG)]

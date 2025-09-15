@@ -1,6 +1,9 @@
 mod topics;
 
-pub use topics::TopicService;
+pub use topics::{TopicService};
+
+#[cfg(test)]
+pub use topics::DEFAULT_TOPIC_SEARCH_PAGE_SIZE;
 
 use error_stack::{Result, ResultExt};
 
