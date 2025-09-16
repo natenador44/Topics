@@ -6,10 +6,10 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response, Result},
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
 };
 use serde::Deserialize;
-use tracing::{Level, info, instrument};
+use tracing::{info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 use uuid::Uuid;

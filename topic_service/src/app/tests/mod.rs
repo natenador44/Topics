@@ -1,6 +1,6 @@
 //! All tests in this module are intended to test the contract made by the API,
 //! e.g. return codes, handling query parameters, handling path parameters.
-use error_stack::Result;
+use crate::error::AppResult;
 use std::{ops::Deref, sync::Arc};
 
 use crate::app::models::TopicId;
@@ -63,11 +63,11 @@ impl TopicRepository for MockTopicRepoWrapper {
         page: usize,
         page_size: usize,
         filters: Vec<TopicFilter>,
-    ) -> Result<Vec<Topic>, TopicRepoError> {
+    ) -> AppResult<Vec<Topic>, TopicRepoError> {
         self.0.search(page, page_size, filters).await
     }
 
-    async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicRepoError> {
+    async fn get(&self, topic_id: TopicId) -> AppResult<Option<Topic>, TopicRepoError> {
         self.0.get(topic_id).await
     }
 
@@ -75,11 +75,11 @@ impl TopicRepository for MockTopicRepoWrapper {
         &self,
         name: String,
         description: Option<String>,
-    ) -> Result<TopicId, TopicRepoError> {
+    ) -> AppResult<TopicId, TopicRepoError> {
         self.0.create(name, description).await
     }
 
-    async fn delete(&self, topic_id: TopicId) -> Result<(), TopicRepoError> {
+    async fn delete(&self, topic_id: TopicId) -> AppResult<(), TopicRepoError> {
         self.0.delete(topic_id).await
     }
 
@@ -88,7 +88,7 @@ impl TopicRepository for MockTopicRepoWrapper {
         topic_id: TopicId,
         name: Option<String>,
         description: Option<String>,
-    ) -> Result<Option<Topic>, TopicRepoError> {
+    ) -> AppResult<Option<Topic>, TopicRepoError> {
         self.0.update(topic_id, name, description).await
     }
 }

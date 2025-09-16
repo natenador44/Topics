@@ -7,9 +7,9 @@ use crate::{
     },
     error::TopicServiceError,
 };
-use error_stack::{Result, ResultExt};
+use error_stack::ResultExt;
+use crate::error::AppResult;
 use tracing::instrument;
-use uuid::Uuid;
 
 pub const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: usize = 25;
 
@@ -44,7 +44,7 @@ impl<T: Repository> TopicService<T> {
         name: Option<String>,
         description: Option<String>,
         pagination: Pagination,
-    ) -> Result<Vec<Topic>, TopicServiceError> {
+    ) -> AppResult<Vec<Topic>, TopicServiceError> {
         let topic_repo = self.repo.topics();
         let page = pagination.page;
         let page_size = pagination
@@ -67,7 +67,7 @@ impl<T: Repository> TopicService<T> {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "service#get_by_id")]
-    pub async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicServiceError> {
+    pub async fn get(&self, topic_id: TopicId) -> AppResult<Option<Topic>, TopicServiceError> {
         let topic = self
             .repo
             .topics()
@@ -82,7 +82,7 @@ impl<T: Repository> TopicService<T> {
         &self,
         name: String,
         description: Option<String>,
-    ) -> Result<TopicId, TopicServiceError> {
+    ) -> AppResult<TopicId, TopicServiceError> {
         let new_id = self
             .repo
             .topics()
@@ -94,7 +94,7 @@ impl<T: Repository> TopicService<T> {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "service#delete")]
-    pub async fn delete(&self, topic_id: TopicId) -> Result<(), TopicServiceError> {
+    pub async fn delete(&self, topic_id: TopicId) -> AppResult<(), TopicServiceError> {
         self.repo
             .topics()
             .delete(topic_id)
@@ -108,7 +108,7 @@ impl<T: Repository> TopicService<T> {
         topic_id: TopicId,
         name: Option<String>,
         description: Option<String>,
-    ) -> Result<Option<Topic>, TopicServiceError> {
+    ) -> AppResult<Option<Topic>, TopicServiceError> {
         self.repo
             .topics()
             .update(topic_id, name, description)

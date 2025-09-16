@@ -5,7 +5,8 @@ pub use topics::TopicService;
 #[cfg(test)]
 pub use topics::DEFAULT_TOPIC_SEARCH_PAGE_SIZE;
 
-use error_stack::{Result, ResultExt};
+use error_stack::ResultExt;
+use crate::error::AppResult;
 
 use crate::app::repository::file::FileRepo;
 
@@ -29,7 +30,7 @@ where
 #[error("failed to create service")]
 pub struct ServiceBuildError;
 
-pub fn build() -> Result<Service<FileRepo>, ServiceBuildError> {
+pub fn build() -> AppResult<Service<FileRepo>, ServiceBuildError> {
     Ok(Service {
         topics: TopicService::new(
             FileRepo::init(tokio::runtime::Handle::current()).change_context(ServiceBuildError)?,

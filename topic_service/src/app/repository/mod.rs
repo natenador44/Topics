@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use error_stack::Result;
+use crate::error::AppResult;
 
 use crate::app::models::{Topic, TopicId};
 
@@ -43,27 +43,27 @@ pub trait TopicRepository {
         page: usize,
         page_size: usize,
         filters: Vec<TopicFilter>, // TODO find a way to not allocate memory with each request
-    ) -> impl Future<Output = Result<Vec<Topic>, TopicRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<Vec<Topic>, TopicRepoError>> + Send;
 
     fn get(
         &self,
         topic_id: TopicId,
-    ) -> impl Future<Output = Result<Option<Topic>, TopicRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<Option<Topic>, TopicRepoError>> + Send;
 
     fn create(
         &self,
         name: String,
         description: Option<String>,
-    ) -> impl Future<Output = Result<TopicId, TopicRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<TopicId, TopicRepoError>> + Send;
 
-    fn delete(&self, topic_id: TopicId) -> impl Future<Output = Result<(), TopicRepoError>> + Send;
+    fn delete(&self, topic_id: TopicId) -> impl Future<Output = AppResult<(), TopicRepoError>> + Send;
 
     fn update(
         &self,
         topic_id: TopicId,
         name: Option<String>,
         description: Option<String>,
-    ) -> impl Future<Output = Result<Option<Topic>, TopicRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<Option<Topic>, TopicRepoError>> + Send;
 }
 
 #[cfg_attr(test, mockall::automock)]

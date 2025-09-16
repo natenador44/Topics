@@ -1,5 +1,8 @@
+use std::error::Error;
 use axum::{http::StatusCode, response::IntoResponse};
-use error_stack::{Context, Report};
+use error_stack::{Report};
+
+pub type AppResult<T, E> = Result<T, Report<E>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitError {
@@ -15,9 +18,9 @@ pub enum InitError {
 
 #[derive(thiserror::Error)]
 #[error("there was an error running the endpoint")]
-pub struct ServiceError<T: Context>(Report<T>);
+pub struct ServiceError<T: Error>(Report<T>);
 
-impl<T: Context> std::fmt::Debug for ServiceError<T> {
+impl<T: Error> std::fmt::Debug for ServiceError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
@@ -25,14 +28,14 @@ impl<T: Context> std::fmt::Debug for ServiceError<T> {
 
 impl<T> From<Report<T>> for ServiceError<T>
 where
-    T: Context,
+    T: Error,
 {
     fn from(value: Report<T>) -> Self {
         Self(value)
     }
 }
 
-impl<T: Context> IntoResponse for ServiceError<T> {
+impl<T: Error> IntoResponse for ServiceError<T> {
     fn into_response(self) -> axum::response::Response {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }

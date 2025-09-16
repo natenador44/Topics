@@ -13,14 +13,14 @@ use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
 };
-use error_stack::{Result, ResultExt};
+use error_stack::ResultExt;
+use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
 use tokio::{
-    runtime::{Handle, Runtime},
+    runtime::Handle,
     sync::RwLock,
 };
-use tracing::field::{ValueSet, debug, display};
-use tracing::{Level, Metadata, Span, debug, error, info, instrument, span};
+use tracing::{Level, debug, error, info, instrument, span};
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let app_dir = PathBuf::from(
@@ -58,7 +58,7 @@ pub struct FileRepo {
 
 impl FileRepo {
     // consider making load/save data async. this would require loading the entire file into memory first.
-    pub fn init(runtime: Handle) -> Result<Self, LoadError> {
+    pub fn init(runtime: Handle) -> AppResult<Self, LoadError> {
         let (tx, rc) = std::sync::mpsc::channel();
         let topics = Arc::new(RwLock::new(load_data(&TOPICS_FILE)?));
         let tc = Arc::clone(&topics);
@@ -145,7 +145,7 @@ impl TopicRepository for FileTopicRepo {
         page: usize,
         page_size: usize,
         filters: Vec<TopicFilter>,
-    ) -> Result<Vec<Topic>, TopicRepoError> {
+    ) -> AppResult<Vec<Topic>, TopicRepoError> {
         let topics = self.topics.read().await;
 
         let page = paginate_list(&topics, page, page_size);
@@ -164,7 +164,7 @@ impl TopicRepository for FileTopicRepo {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "repo#get_by_id")]
-    async fn get(&self, topic_id: TopicId) -> Result<Option<Topic>, TopicRepoError> {
+    async fn get(&self, topic_id: TopicId) -> AppResult<Option<Topic>, TopicRepoError> {
         let topics = self.topics.read().await;
         Ok(topics.iter().find(|t| t.id == topic_id).cloned())
     }
@@ -174,7 +174,7 @@ impl TopicRepository for FileTopicRepo {
         &self,
         name: String,
         description: Option<String>,
-    ) -> Result<TopicId, TopicRepoError> {
+    ) -> AppResult<TopicId, TopicRepoError> {
         let new_id = TopicId::now_v7();
         let new_topic = Topic::new(new_id, name, description);
         let mut topics = self.topics.write().await;
@@ -185,7 +185,7 @@ impl TopicRepository for FileTopicRepo {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "repo#delete")]
-    async fn delete(&self, topic_id: TopicId) -> Result<(), TopicRepoError> {
+    async fn delete(&self, topic_id: TopicId) -> AppResult<(), TopicRepoError> {
         let mut topics = self.topics.write().await;
         topics.retain(|t| t.id != topic_id);
         self.send_update(topic_id, TopicUpdateType::Delete);
@@ -198,7 +198,7 @@ impl TopicRepository for FileTopicRepo {
         topic_id: TopicId,
         name: Option<String>,
         description: Option<String>,
-    ) -> Result<Option<Topic>, TopicRepoError> {
+    ) -> AppResult<Option<Topic>, TopicRepoError> {
         let mut topics = self.topics.write().await;
 
         let Some(topic) = topics.iter_mut().find(|t| t.id == topic_id) else {
@@ -266,7 +266,7 @@ pub enum SaveError {
 }
 
 #[instrument(fields(data_type = std::any::type_name::<T>()))]
-fn load_data<T>(path: &'static Path) -> Result<T, LoadError>
+fn load_data<T>(path: &'static Path) -> AppResult<T, LoadError>
 where
     for<'a> T: Deserialize<'a> + Serialize + Default,
 {
@@ -278,11 +278,11 @@ where
             .read(true)
             .open(path)
             .change_context(LoadError::Io)
-            .attach_printable_lazy(|| path.display())?;
+            .attach_with(|| path.display())?;
 
         serde_json::from_reader(file)
             .change_context(LoadError::Json)
-            .attach_printable_lazy(|| path.display())?
+            .attach_with(|| path.display())?
     } else {
         debug!("file does not exist, creating and populating with default");
         let data = T::default();
@@ -296,7 +296,7 @@ where
 }
 
 #[instrument(skip(data), fields(data_type = std::any::type_name::<T>()))]
-fn save_data<T>(path: &'static Path, data: &T) -> Result<(), SaveError>
+fn save_data<T>(path: &'static Path, data: &T) -> AppResult<(), SaveError>
 where
     T: Serialize,
 {
@@ -307,7 +307,7 @@ where
         .write(true)
         .open(path)
         .change_context(SaveError::Io)
-        .attach_printable_lazy(|| path.display())?;
+        .attach_with(|| path.display())?;
 
     serde_json::to_writer(file, data).change_context(SaveError::Json)?;
     debug!("writing data complete");

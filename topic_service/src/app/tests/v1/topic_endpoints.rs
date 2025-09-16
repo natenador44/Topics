@@ -527,7 +527,8 @@ fn create_topic_list(amount: usize) -> Vec<Topic> {
 }
 
 mod return_scenario {
-    use error_stack::{Result, report};
+    use error_stack::IntoReport;
+    use crate::error::AppResult;
     use futures::{FutureExt, future::BoxFuture};
 
     use crate::app::{
@@ -541,7 +542,7 @@ mod return_scenario {
             _: usize,
             _: usize,
             _: Vec<TopicFilter>,
-        ) -> BoxFuture<'a, Result<Vec<Topic>, TopicRepoError>> {
+        ) -> BoxFuture<'a, AppResult<Vec<Topic>, TopicRepoError>> {
             async { Ok(vec![]) }.boxed()
         }
 
@@ -551,7 +552,7 @@ mod return_scenario {
             usize,
             usize,
             Vec<TopicFilter>,
-        ) -> BoxFuture<'a, Result<Vec<Topic>, TopicRepoError>> {
+        ) -> BoxFuture<'a, AppResult<Vec<Topic>, TopicRepoError>> {
             move |_, _, _| async move { Ok(topics) }.boxed()
         }
 
@@ -559,8 +560,8 @@ mod return_scenario {
             usize,
             usize,
             Vec<TopicFilter>,
-        ) -> BoxFuture<'a, Result<Vec<Topic>, TopicRepoError>> {
-            move |_, _, _| async move { Err(report!(TopicRepoError::Search)) }.boxed()
+        ) -> BoxFuture<'a, AppResult<Vec<Topic>, TopicRepoError>> {
+            move |_, _, _| async move { Err(TopicRepoError::Search.into_report()) }.boxed()
         }
     }
 
@@ -569,19 +570,19 @@ mod return_scenario {
         use crate::app::models::TopicId;
         use uuid::Uuid;
 
-        pub fn not_found<'a>(_: Uuid) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+        pub fn not_found<'a>(_: Uuid) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
             async { Ok(None) }.boxed()
         }
 
         pub fn found<'a>(
             topic: Topic,
-        ) -> impl FnOnce(TopicId) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+        ) -> impl FnOnce(TopicId) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
             |_| async { Ok(Some(topic)) }.boxed()
         }
 
         pub fn error<'a>()
-        -> impl FnOnce(TopicId) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
-            move |_| async move { Err(report!(TopicRepoError::Get)) }.boxed()
+        -> impl FnOnce(TopicId) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
+            move |_| async move { Err(TopicRepoError::Get.into_report()) }.boxed()
         }
     }
 
@@ -591,7 +592,7 @@ mod return_scenario {
 
         pub fn success<'a>(
             topic_id: TopicId,
-        ) -> impl FnOnce(String, Option<String>) -> BoxFuture<'a, Result<TopicId, TopicRepoError>>
+        ) -> impl FnOnce(String, Option<String>) -> BoxFuture<'a, AppResult<TopicId, TopicRepoError>>
         {
             move |_, _| async move { Ok(topic_id) }.boxed()
         }
@@ -599,8 +600,8 @@ mod return_scenario {
         pub fn error<'a>(
             _: String,
             _: Option<String>,
-        ) -> BoxFuture<'a, Result<TopicId, TopicRepoError>> {
-            async { Err(report!(TopicRepoError::Create)) }.boxed()
+        ) -> BoxFuture<'a, AppResult<TopicId, TopicRepoError>> {
+            async { Err(TopicRepoError::Create.into_report()) }.boxed()
         }
     }
 
@@ -608,19 +609,18 @@ mod return_scenario {
         use super::*;
         use crate::app::models::TopicId;
 
-        pub fn success<'a>(_: TopicId) -> BoxFuture<'a, Result<(), TopicRepoError>> {
+        pub fn success<'a>(_: TopicId) -> BoxFuture<'a, AppResult<(), TopicRepoError>> {
             async { Ok(()) }.boxed()
         }
 
-        pub fn error<'a>(_: TopicId) -> BoxFuture<'a, Result<(), TopicRepoError>> {
-            async { Err(report!(TopicRepoError::Delete)) }.boxed()
+        pub fn error<'a>(_: TopicId) -> BoxFuture<'a, AppResult<(), TopicRepoError>> {
+            async { Err(TopicRepoError::Delete.into_report()) }.boxed()
         }
     }
 
     pub mod update {
         use super::*;
         use crate::app::models::TopicId;
-        use uuid::Uuid;
 
         pub fn success<'a>(
             topic: Topic,
@@ -628,7 +628,7 @@ mod return_scenario {
             TopicId,
             Option<String>,
             Option<String>,
-        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+        ) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
             |_, _, _| async { Ok(Some(topic)) }.boxed()
         }
 
@@ -636,7 +636,7 @@ mod return_scenario {
             _: TopicId,
             _: Option<String>,
             _: Option<String>,
-        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
+        ) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
             async { Ok(None) }.boxed()
         }
 
@@ -644,8 +644,8 @@ mod return_scenario {
             _: TopicId,
             _: Option<String>,
             _: Option<String>,
-        ) -> BoxFuture<'a, Result<Option<Topic>, TopicRepoError>> {
-            async { Err(report!(TopicRepoError::Update)) }.boxed()
+        ) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
+            async { Err(TopicRepoError::Update.into_report()) }.boxed()
         }
     }
 }

@@ -1,6 +1,7 @@
 use crate::{app::state::AppState, error::InitError};
 use axum::Router;
-use error_stack::{Result, ResultExt};
+use error_stack::ResultExt;
+use crate::error::AppResult;
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -14,7 +15,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-pub async fn run() -> Result<(), InitError> {
+pub async fn run() -> AppResult<(), InitError> {
     let listener = build_listener().await?;
 
     let services = services::build().change_context(InitError::Service)?; // this error message is going to be redundant, fix later
@@ -33,13 +34,13 @@ pub async fn run() -> Result<(), InitError> {
     serve_on(listener, routes).await
 }
 
-async fn serve_on(listener: TcpListener, routes: Router) -> Result<(), InitError> {
+async fn serve_on(listener: TcpListener, routes: Router) -> AppResult<(), InitError> {
     axum::serve(listener, routes)
         .await
         .change_context(InitError::Serve)
 }
 
-async fn build_listener() -> Result<TcpListener, InitError> {
+async fn build_listener() -> AppResult<TcpListener, InitError> {
     TcpListener::bind("0.0.0.0:3000")
         .await
         .change_context(InitError::Port)

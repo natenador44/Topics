@@ -1,4 +1,4 @@
-use error_stack::Result;
+use crate::error::AppResult;
 use tracing::{error, info};
 
 mod app;
@@ -17,7 +17,7 @@ async fn main() {
     }
 }
 
-async fn try_main() -> Result<(), InitError> {
+async fn try_main() -> AppResult<(), InitError> {
     logging::init()?;
 
     app::run().await
