@@ -73,11 +73,19 @@ where
     ),
     request_body = SetRequest,
 )]
-async fn create_set(
+async fn create_set<T>(
+    State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
     Json(set_request): Json<SetRequest>,
-) -> Result<Response, ServiceError<SetServiceError>> {
-    todo!()
+) -> Result<Response, ServiceError<SetServiceError>>
+where
+    T: Repository + Debug,
+{
+    service
+        .sets
+        .create(topic_id, set_request.name, set_request.entities)?;
+
+    Ok(StatusCode::CREATED.into_response())
 }
 
 #[derive(Deserialize, ToSchema, Debug)]

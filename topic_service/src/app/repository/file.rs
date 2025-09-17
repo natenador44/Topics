@@ -7,19 +7,23 @@ use std::{
     },
 };
 
-use crate::app::models::TopicId;
-use crate::app::repository::TopicRepoError;
 use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
 };
-use error_stack::ResultExt;
-use crate::error::AppResult;
-use serde::{Deserialize, Serialize};
-use tokio::{
-    runtime::Handle,
-    sync::RwLock,
+use crate::app::{
+    models::{Entity, TopicSet},
+    repository::TopicRepoError,
 };
+use crate::app::{
+    models::{TopicId, TopicSetId},
+    repository::SetRepoError,
+};
+use crate::error::AppResult;
+use error_stack::ResultExt;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::{runtime::Handle, sync::RwLock};
 use tracing::{Level, debug, error, info, instrument, span};
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -35,6 +39,12 @@ static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 static TOPICS_FILE: LazyLock<PathBuf> = LazyLock::new(|| APP_DIR.join("topics.json"));
+
+static SETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    let set_dir = APP_DIR.join("sets");
+    std::fs::create_dir_all(&set_dir).expect("sets directory could not be created");
+    set_dir
+});
 
 #[derive(Debug)]
 enum TopicUpdateType {
@@ -318,4 +328,31 @@ where
 pub struct FileIdentifierRepo;
 impl IdentifierRepository for FileIdentifierRepo {}
 pub struct FileSetRepo;
-impl SetRepository for FileSetRepo {}
+impl SetRepository for FileSetRepo {
+    async fn create(
+        &self,
+        topic_id: TopicId,
+        set_name: String,
+        initial_entities: Vec<Entity>,
+    ) -> AppResult<TopicSet, super::SetRepoError> {
+        let set_id = TopicSetId::now_v7();
+        let topic_dir = SETS_DIR.join(topic_id.to_string());
+        if !topic_dir.exists() {
+            std::fs::create_dir(&topic_dir)
+                .change_context(SetRepoError::Create)
+                .attach_with(|| topic_dir.display().to_string())?;
+        }
+
+        let set_file_path = topic_dir.join(set_id.to_string());
+
+        let set = TopicSet {
+            id: set_id,
+            name: set_name,
+            entities: initial_entities,
+        };
+
+        save_data(&set_file_path, &set).change_context(SetRepoError::Create)?;
+
+        Ok(set)
+    }
+}

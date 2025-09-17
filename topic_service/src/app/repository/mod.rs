@@ -1,8 +1,10 @@
 use std::fmt::Debug;
 
+use serde_json::Value;
+
 use crate::error::AppResult;
 
-use crate::app::models::{Topic, TopicId};
+use crate::app::models::{Entity, Topic, TopicId, TopicSet, TopicSetId};
 
 pub mod file;
 
@@ -28,6 +30,12 @@ pub enum TopicRepoError {
     Delete,
     #[error("failed to update topic")]
     Update,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SetRepoError {
+    #[error("failed to create set")]
+    Create,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -56,7 +64,10 @@ pub trait TopicRepository {
         description: Option<String>,
     ) -> impl Future<Output = AppResult<TopicId, TopicRepoError>> + Send;
 
-    fn delete(&self, topic_id: TopicId) -> impl Future<Output = AppResult<(), TopicRepoError>> + Send;
+    fn delete(
+        &self,
+        topic_id: TopicId,
+    ) -> impl Future<Output = AppResult<(), TopicRepoError>> + Send;
 
     fn update(
         &self,
@@ -70,4 +81,11 @@ pub trait TopicRepository {
 pub trait IdentifierRepository {}
 
 #[cfg_attr(test, mockall::automock)]
-pub trait SetRepository {}
+pub trait SetRepository {
+    fn create(
+        &self,
+        topic_id: TopicId,
+        set_name: String,
+        initial_entities: Vec<Entity>,
+    ) -> impl Future<Output = AppResult<TopicSet, SetRepoError>> + Send;
+}
