@@ -1,4 +1,5 @@
 use crate::app::models::TopicId;
+use crate::error::AppResult;
 use crate::{
     app::{
         models::Topic,
@@ -8,29 +9,13 @@ use crate::{
     error::TopicServiceError,
 };
 use error_stack::ResultExt;
-use crate::error::AppResult;
 use tracing::instrument;
 
 pub const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: usize = 25;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TopicService<T> {
     repo: T,
-}
-
-impl<T> TopicService<T> {}
-
-impl<T> TopicService<T> {}
-
-impl<T> Clone for TopicService<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            repo: self.repo.clone(),
-        }
-    }
 }
 
 impl<T: Repository> TopicService<T> {

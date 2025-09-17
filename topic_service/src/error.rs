@@ -1,6 +1,6 @@
-use std::error::Error;
 use axum::{http::StatusCode, response::IntoResponse};
-use error_stack::{Report};
+use error_stack::Report;
+use std::error::Error;
 
 pub type AppResult<T, E> = Result<T, Report<E>>;
 
@@ -44,3 +44,7 @@ impl<T: Error> IntoResponse for ServiceError<T> {
 #[derive(Debug, thiserror::Error)]
 #[error("topic service failed")]
 pub struct TopicServiceError;
+
+#[derive(Debug, thiserror::Error)]
+#[error("set service failed")]
+pub struct SetServiceError;

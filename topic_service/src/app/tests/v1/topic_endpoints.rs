@@ -1,5 +1,6 @@
 use crate::app;
 use crate::app::models::TopicId;
+use crate::app::services::SetService;
 use crate::app::{
     models::Topic,
     repository::{MockTopicRepository, TopicFilter},
@@ -509,8 +510,10 @@ async fn run_delete_endpoint(path: &str, topic_repo: MockTopicRepository) -> Tes
 }
 
 fn init_test_server(topic_repo: MockTopicRepository) -> TestServer {
+    let repo = MockRepo::for_topics_test(topic_repo);
     let services = Service {
-        topics: TopicService::new(MockRepo::for_topics_test(topic_repo)),
+        topics: TopicService::new(repo.clone()),
+        sets: SetService::new(repo),
     };
 
     let app_state = AppState::new(services);
@@ -527,8 +530,8 @@ fn create_topic_list(amount: usize) -> Vec<Topic> {
 }
 
 mod return_scenario {
-    use error_stack::IntoReport;
     use crate::error::AppResult;
+    use error_stack::IntoReport;
     use futures::{FutureExt, future::BoxFuture};
 
     use crate::app::{
@@ -560,7 +563,8 @@ mod return_scenario {
             usize,
             usize,
             Vec<TopicFilter>,
-        ) -> BoxFuture<'a, AppResult<Vec<Topic>, TopicRepoError>> {
+        )
+            -> BoxFuture<'a, AppResult<Vec<Topic>, TopicRepoError>> {
             move |_, _, _| async move { Err(TopicRepoError::Search.into_report()) }.boxed()
         }
     }
@@ -576,7 +580,8 @@ mod return_scenario {
 
         pub fn found<'a>(
             topic: Topic,
-        ) -> impl FnOnce(TopicId) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
+        ) -> impl FnOnce(TopicId) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>>
+        {
             |_| async { Ok(Some(topic)) }.boxed()
         }
 

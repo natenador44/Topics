@@ -3,6 +3,8 @@ use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::app::models::IdentifierId;
+
 pub type EntityId = Uuid;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -12,6 +14,6 @@ pub struct Entity {
     pub id: Uuid,
     pub topic_id: Uuid,
     pub set_id: Uuid,
-    pub identifiers: Vec<Uuid>, // TODO better way to store/identify these
-    pub payload: Value,
+    pub applied_identifiers: Vec<Uuid>, // TODO better way to store/identify these
+    pub payload: Value,                 // this will be different later
 }

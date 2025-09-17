@@ -17,12 +17,22 @@ mod v1;
 #[derive(Debug, Clone)]
 struct MockRepo {
     topic_repo: MockTopicRepoWrapper,
+    set_repo: MockSetRepoWrapper,
 }
 
 impl MockRepo {
     fn for_topics_test(topic_repo: MockTopicRepository) -> Self {
+        Self::new(topic_repo, MockSetRepository::new())
+    }
+
+    fn for_sets_test(set_repo: MockSetRepository) -> Self {
+        Self::new(MockTopicRepository::new(), set_repo)
+    }
+
+    fn new(topic_repo: MockTopicRepository, set_repo: MockSetRepository) -> Self {
         Self {
             topic_repo: MockTopicRepoWrapper(Arc::new(topic_repo)),
+            set_repo: MockSetRepoWrapper(Arc::new(set_repo)),
         }
     }
 }
