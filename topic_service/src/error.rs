@@ -47,11 +47,4 @@ pub struct TopicServiceError;
 
 #[derive(Debug, thiserror::Error)]
 #[error("set service failed")]
-pub enum SetServiceError {
-    #[error("topic not found")]
-    TopicNotFound,
-    #[error("error occurred while interfacing with the topic service")]
-    TopicServiceError,
-    #[error("failed to create topic set")]
-    Create,
-}
+pub struct SetServiceError;

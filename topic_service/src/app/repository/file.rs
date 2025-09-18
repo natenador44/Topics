@@ -13,11 +13,11 @@ use crate::app::{
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
 };
 use crate::app::{
-    models::{Entity, TopicSet},
+    models::{Entity, Set},
     repository::TopicRepoError,
 };
 use crate::app::{
-    models::{TopicId, TopicSetId},
+    models::{TopicId, SetId},
     repository::SetRepoError,
 };
 use crate::error::AppResult;
@@ -71,7 +71,7 @@ impl FileRepo {
     // consider making load/save data async. this would require loading the entire file into memory first.
     pub fn init(runtime: Handle) -> AppResult<Self, LoadError> {
         let (tx, rc) = std::sync::mpsc::channel();
-        let topics = Arc::new(RwLock::new(load_data(&TOPICS_FILE)?));
+        let topics = Arc::new(RwLock::new(load_data_with_init_handling(&TOPICS_FILE)?));
         let tc = Arc::clone(&topics);
 
         runtime.spawn_blocking(move || handle_topic_updates(tc, rc));
@@ -282,7 +282,7 @@ pub enum SaveError {
 }
 
 #[instrument(fields(data_type = std::any::type_name::<T>()))]
-fn load_data<T>(path: &'static Path) -> AppResult<T, LoadError>
+fn load_data_with_init_handling<T>(path: &'static Path) -> AppResult<T, LoadError>
 where
     for<'a> T: Deserialize<'a> + Serialize + Default,
 {
@@ -305,6 +305,28 @@ where
         save_data(path, &data).change_context(LoadError::FileInit)?;
         data
     };
+
+    debug!("loading data complete");
+
+    Ok(data)
+}
+
+#[instrument(fields(data_type = std::any::type_name::<T>()))]
+fn load_data<T>(path: &Path) -> AppResult<T, LoadError>
+where
+        for<'a> T: Deserialize<'a>,
+{
+    debug!("loading data...");
+
+    let file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .change_context(LoadError::Io)
+        .attach_with(|| path.display().to_string())?;
+
+    let data = serde_json::from_reader(file)
+        .change_context(LoadError::Json)
+        .attach_with(|| path.display().to_string())?;
 
     debug!("loading data complete");
 
@@ -350,14 +372,15 @@ impl SetRepository for FileSetRepo {
         topic_id: TopicId,
         set_name: String,
         initial_entity_payloads: Vec<Value>,
-    ) -> AppResult<TopicSet, super::SetRepoError> {
-        let set_id = TopicSetId::new();
+    ) -> AppResult<Set, SetRepoError> {
         let topic_dir = SETS_DIR.join(topic_id.to_string());
         if !topic_dir.exists() {
             std::fs::create_dir(&topic_dir)
                 .change_context(SetRepoError::Create)
                 .attach_with(|| topic_dir.display().to_string())?;
         }
+        
+        let set_id = SetId::new();
 
         let mut entity_ids = Vec::with_capacity(initial_entity_payloads.len());
 
@@ -386,7 +409,7 @@ impl SetRepository for FileSetRepo {
         )
         .change_context(SetRepoError::Create)?;
 
-        let set = TopicSet {
+        let set = Set {
             id: set_id,
             topic_id,
             name: set_name,
@@ -394,4 +417,35 @@ impl SetRepository for FileSetRepo {
 
         Ok(set)
     }
+    
+    #[instrument(skip_all, name = "repo#get")]
+    async fn get(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId
+    ) -> AppResult<Option<Set>, SetRepoError> {
+        let set_file_path = generate_set_file_path(topic_id, set_id);
+        
+        if !set_file_path.exists() {
+            return Ok(None);
+        }
+        
+        #[derive(Deserialize)]
+        struct JustSetName {
+            name: String,
+        }
+        
+        let JustSetName { name } = load_data::<JustSetName>(&set_file_path)
+            .change_context(SetRepoError::Get)?;
+        
+        Ok(Some(Set {
+            id: set_id,
+            topic_id,
+            name,
+        }))
+    }
+}
+
+fn generate_set_file_path(topic_id: TopicId, set_id: SetId) -> PathBuf {
+    SETS_DIR.join(topic_id.to_string()).join(format!("{}.json", set_id.to_string()))
 }

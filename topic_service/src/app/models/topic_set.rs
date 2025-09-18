@@ -8,22 +8,22 @@ use uuid::Uuid;
 #[repr(transparent)]
 #[serde(transparent)]
 #[schema(as = uuid::Uuid)]
-pub struct TopicSetId(Uuid);
-impl TopicSetId {
+pub struct SetId(Uuid);
+impl SetId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
     }
 }
 
-impl Display for TopicSetId {
+impl Display for SetId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct TopicSet {
-    pub id: TopicSetId,
+pub struct Set {
+    pub id: SetId,
     pub topic_id: TopicId,
     pub name: String,
 }

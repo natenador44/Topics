@@ -1,6 +1,6 @@
 //! All tests in this module are intended to test the contract made by the API,
 //! e.g. return codes, handling query parameters, handling path parameters.
-use crate::app::models::{Entity, EntityId, TopicId, TopicSet, TopicSetId};
+use crate::app::models::{Entity, EntityId, TopicId, Set, SetId};
 use crate::app::repository::SetRepoError;
 use crate::app::{
     models::Topic,
@@ -136,9 +136,19 @@ impl SetRepository for MockSetRepoWrapper {
         topic_id: TopicId,
         set_name: String,
         initial_entity_payloads: Vec<Value>,
-    ) -> AppResult<TopicSet, SetRepoError> {
+    ) -> AppResult<Set, SetRepoError> {
         self.0
             .create(topic_id, set_name, initial_entity_payloads)
+            .await
+    }
+    
+    async fn get(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> AppResult<Option<Set>, SetRepoError> {
+        self.0
+            .get(topic_id, set_id)
             .await
     }
 }

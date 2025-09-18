@@ -1,4 +1,4 @@
-use crate::app::models::{TopicId, TopicSetId};
+use crate::app::models::{TopicId, SetId};
 use crate::app::repository::{MockSetRepository, MockTopicRepository};
 use crate::app::routes;
 use crate::app::services::{Service, SetService, TopicService};
@@ -15,7 +15,7 @@ const TEST_SET_NAME: &str = "test";
 #[tokio::test]
 async fn create_set_returns_created_if_successful() {
     let topic_id = TopicId::new();
-    let set_id = TopicSetId::new();
+    let set_id = SetId::new();
 
     let mut set_repo = MockSetRepository::new();
     set_repo
@@ -48,7 +48,7 @@ async fn create_set_returns_created_if_successful() {
 #[tokio::test]
 async fn create_set_entities_are_optional() {
     let topic_id = TopicId::new();
-    let set_id = TopicSetId::new();
+    let set_id = SetId::new();
 
     let mut set_repo = MockSetRepository::new();
     set_repo
@@ -222,6 +222,17 @@ async fn create_set_entities_json_type_is_array() {
     }
 }
 
+#[tokio::test]
+async fn get_set_returns_ok_and_set_if_successful() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+    
+    let mut set_repo = MockSetRepository::new();
+    set_repo.expect_get()
+        .with(predicate::eq(topic_id), predicate::eq(set_id))
+        .return_once(return_scenario::get::found(topic_id, set_id, TEST_SET_NAME));
+}
+
 async fn run_post_endpoint<T>(
     path: &str,
     set_repo: MockSetRepository,
@@ -276,8 +287,8 @@ fn init_test_server(set_repo: MockSetRepository, topic_repo: MockTopicRepository
 
 mod return_scenario {
     use error_stack::IntoReport;
-    use crate::app::models::TopicSet;
-    use crate::app::models::{TopicId, TopicSetId};
+    use crate::app::models::Set;
+    use crate::app::models::{TopicId, SetId};
     use crate::app::repository::{SetRepoError, TopicRepoError};
     use crate::error::AppResult;
     use futures::FutureExt;
@@ -297,17 +308,15 @@ mod return_scenario {
 
     pub mod create {
         use super::*;
-        use futures::future::BoxFuture;
-        use tracing_subscriber::filter::FilterExt;
 
         pub fn success<'a, N: ToString + Send + Sync + 'static>(
             topic_id: TopicId,
-            set_id: TopicSetId,
+            set_id: SetId,
             name: N,
-        ) -> impl FnOnce(TopicId, String, Vec<Value>) -> SetMockReturn<'a, TopicSet> {
+        ) -> impl FnOnce(TopicId, String, Vec<Value>) -> SetMockReturn<'a, Set> {
             move |_, _, _| {
                 async move {
-                    Ok(TopicSet {
+                    Ok(Set {
                         id: set_id,
                         topic_id,
                         name: name.to_string(),
@@ -317,8 +326,20 @@ mod return_scenario {
             }
         }
 
-        pub fn error<'a>(_: TopicId, _: String, _: Vec<Value>) -> SetMockReturn<'a, TopicSet> {
+        pub fn error<'a>(_: TopicId, _: String, _: Vec<Value>) -> SetMockReturn<'a, Set> {
             async { Err(SetRepoError::Create.into_report()) }.boxed()
+        }
+    }
+    
+    pub mod get {
+        use super::*;
+        pub fn found(topic_id: TopicId, set_id: SetId, name: impl ToString) -> impl FnOnce(TopicId, SetId) -> SetMockReturn<'static, Option<Set>> {
+            let name = name.to_string();
+            move |_, _| async move { Ok(Some(Set {
+                id: set_id,
+                topic_id,
+                name,
+            }))}.boxed()
         }
     }
 }

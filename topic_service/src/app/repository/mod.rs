@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::error::AppResult;
 
-use crate::app::models::{Entity, EntityId, Topic, TopicId, TopicSet, TopicSetId};
+use crate::app::models::{Entity, EntityId, Topic, TopicId, Set, SetId};
 
 pub mod file;
 
@@ -38,6 +38,8 @@ pub enum TopicRepoError {
 pub enum SetRepoError {
     #[error("failed to create set")]
     Create,
+    #[error("failed to get set")]
+    Get,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94,5 +96,11 @@ pub trait SetRepository {
         topic_id: TopicId,
         set_name: String,
         initial_entity_payloads: Vec<Value>,
-    ) -> impl Future<Output = AppResult<TopicSet, SetRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<Set, SetRepoError>> + Send;
+
+    fn get(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> impl Future<Output = AppResult<Option<Set>, SetRepoError>> + Send;
 }

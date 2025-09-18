@@ -8,14 +8,17 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
+use axum::extract::{FromRef, FromRequestParts};
+use axum::http::request::Parts;
+use error_stack::IntoReport;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
-use crate::app::models::TopicSet;
+use crate::app::models::Set;
 use crate::{
     app::{
-        models::{Entity, EntityId, TopicId, TopicSetId},
+        models::{Entity, EntityId, TopicId, SetId},
         pagination::Pagination,
         repository::Repository,
         services::Service,
@@ -23,6 +26,7 @@ use crate::{
     },
     error::{ServiceError, SetServiceError},
 };
+use crate::error::TopicServiceError;
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -42,6 +46,7 @@ pub struct SetRequest {
 }
 
 const CREATE_SET_PATH: &str = "/";
+const GET_SET_PATH: &str = "/{set_id}";
 const ADD_ENTITY_PATH: &str = "/{set_id}/entities";
 const SEARCH_ENTITIES_PATH: &str = "/{set_id}/entities";
 const GET_ENTITY_PATH: &str = "/{set_id}/entities/{entity_id}";
@@ -54,6 +59,7 @@ where
 {
     OpenApiRouter::new()
         .route(CREATE_SET_PATH, post(create_set))
+        .route(GET_SET_PATH, get(get_set))
         .route(SEARCH_ENTITIES_PATH, get(search_entities_in_set))
         .route(GET_ENTITY_PATH, get(get_entity_in_set))
         .route(ADD_ENTITY_PATH, put(add_entity_to_set))
@@ -63,7 +69,7 @@ where
 
 #[derive(ToSchema)]
 struct CreateSetResponse {
-    set: TopicSet,
+    set: Set,
     entities_url: String,
 }
 
@@ -107,13 +113,13 @@ async fn create_set<T>(
 where
     T: Repository + Debug,
 {
-    let result = service
+    let new_set = service
         .sets
         .create(topic_id, set_request.name, set_request.entities)
-        .await;
+        .await?;
 
-    match result {
-        Ok(new_set) => Ok(CreateSetResponse {
+    match new_set {
+        Some(new_set) => Ok(CreateSetResponse {
             entities_url: format!(
                 "/api/v1/topics/{}/sets/{}/entities",
                 new_set.topic_id, new_set.id
@@ -122,11 +128,34 @@ where
         }
         .into_response()),
         // TODO find a way to have ? automatically return a 404 response if this is true
-        Err(report) if matches!(report.current_context(), SetServiceError::TopicNotFound) => {
+        None => {
             Ok(StatusCode::NOT_FOUND.into_response())
         }
-        Err(other) => Err(other)?,
     }
+}
+
+#[utoipa::path(
+    get,
+    path = GET_SET_PATH,
+    responses(
+        (status = OK, description = "Set was found", body = Vec<Set>),
+        (status = NOT_FOUND, description = "The topic id or the set id does not exist")
+    ),
+    params(
+        ("topic_id" = TopicId, Path, description = "The topic associated with the set"),
+        ("set_id" = SetId, Path, description = "The set to get")
+    ),
+)]
+// #[axum::debug_handler]
+async fn get_set<T>(
+    State(service): State<Service<T>>,
+    Path((topic_id, set_id)): Path<(TopicId, SetId)>,
+) -> Result<Response, ServiceError<SetServiceError>> 
+    where T: Repository + Debug,
+{
+    let set = service.sets.get(topic_id, set_id).await?;
+    
+    Ok(set.map(|s| Json(s).into_response()).unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -154,13 +183,13 @@ struct EntityResponse {
     ),
     params(
         ("topic_id" = TopicId, Path, description = "The topic associated with the set"),
-        ("set_id" = TopicSetId, Path, description = "The set to search through")
+        ("set_id" = SetId, Path, description = "The set to search through")
     ),
 )]
 // #[axum::debug_handler]
 async fn search_entities_in_set<T>(
     State(service): State<Service<T>>,
-    Path((topic_id, set_id)): Path<(TopicId, TopicSetId)>,
+    Path((topic_id, set_id)): Path<(TopicId, SetId)>,
     // Query(search): Query<EntitySearch>,
     Query(Pagination { page, page_size }): Query<Pagination>,
 ) -> Result<Response, ServiceError<SetServiceError>>
@@ -179,13 +208,13 @@ where
     ),
     params(
         ("topic_id" = TopicId, Path, description = "The topic associated with the set the entity belongs to"),
-        ("set_id" = TopicSetId, Path, description = "The set the entity belongs to"),
+        ("set_id" = SetId, Path, description = "The set the entity belongs to"),
         ("entity_id" = EntityId, Path, description = "The entity to get")
     ),
 )]
 async fn get_entity_in_set<T>(
     State(service): State<Service<T>>,
-    Path((topic_id, set_id, entity_id)): Path<(TopicId, TopicSetId, EntityId)>,
+    Path((topic_id, set_id, entity_id)): Path<(TopicId, SetId, EntityId)>,
 ) -> Result<Response, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
@@ -203,13 +232,13 @@ where
     ),
     params(
         ("topic_id" = TopicId, Path, description = "The topic associated with the new set"),
-        ("set_id" = TopicSetId, Path, description = "The set to add the new entity to")
+        ("set_id" = SetId, Path, description = "The set to add the new entity to")
     ),
     request_body = SetRequest,
 )]
 async fn add_entity_to_set<T>(
     State(service): State<Service<T>>,
-    Path((topic_id, set_id)): Path<(TopicId, TopicSetId)>,
+    Path((topic_id, set_id)): Path<(TopicId, SetId)>,
 ) -> Result<Response, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
@@ -227,12 +256,12 @@ where
     ),
     params(
         ("topic_id" = TopicId, Path, description = "The topic associated with the set"),
-        ("set_id" = TopicSetId, Path, description = "The set to delete")
+        ("set_id" = SetId, Path, description = "The set to delete")
     ),
 )]
 async fn delete_set<T>(
     State(service): State<Service<T>>,
-    Path((topic_id, set_id)): Path<(TopicId, TopicSetId)>,
+    Path((topic_id, set_id)): Path<(TopicId, SetId)>,
 ) -> Result<StatusCode, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
@@ -250,13 +279,13 @@ where
     ),
     params(
         ("topic_id" = TopicId, Path, description = "The topic associated with the new set"),
-        ("set_id" = TopicSetId, Path, description = "The set to add the new entity to"),
+        ("set_id" = SetId, Path, description = "The set to add the new entity to"),
         ("entity_id" = EntityId, Path, description = "The id associated with the entity to remove")
     ),
 )]
 async fn delete_entity_in_set<T>(
     State(service): State<Service<T>>,
-    Path((topic_id, set_id, entity_id)): Path<(TopicId, TopicSetId, EntityId)>,
+    Path((topic_id, set_id, entity_id)): Path<(TopicId, SetId, EntityId)>,
 ) -> Result<StatusCode, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
