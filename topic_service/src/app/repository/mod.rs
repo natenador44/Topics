@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::error::AppResult;
 
-use crate::app::models::{Entity, Topic, TopicId, TopicSet, TopicSetId};
+use crate::app::models::{Entity, EntityId, Topic, TopicId, TopicSet, TopicSetId};
 
 pub mod file;
 
@@ -57,6 +57,11 @@ pub trait TopicRepository {
         &self,
         topic_id: TopicId,
     ) -> impl Future<Output = AppResult<Option<Topic>, TopicRepoError>> + Send;
+    
+    fn exists(
+        &self,
+        topic_id: TopicId,
+    ) -> impl Future<Output = AppResult<bool, TopicRepoError>> + Send;
 
     fn create(
         &self,
@@ -86,6 +91,6 @@ pub trait SetRepository {
         &self,
         topic_id: TopicId,
         set_name: String,
-        initial_entities: Vec<Entity>,
+        initial_entity_payloads: Vec<Value>,
     ) -> impl Future<Output = AppResult<TopicSet, SetRepoError>> + Send;
 }

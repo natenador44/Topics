@@ -2,8 +2,8 @@
 //! e.g. return codes, handling query parameters, handling path parameters.
 use crate::error::AppResult;
 use std::{ops::Deref, sync::Arc};
-
-use crate::app::models::TopicId;
+use serde_json::Value;
+use crate::app::models::{Entity, EntityId, TopicId, TopicSet, TopicSetId};
 use crate::app::{
     models::Topic,
     repository::{
@@ -11,6 +11,7 @@ use crate::app::{
         Repository, SetRepository, TopicFilter, TopicRepoError, TopicRepository,
     },
 };
+use crate::app::repository::SetRepoError;
 
 mod v1;
 
@@ -81,6 +82,10 @@ impl TopicRepository for MockTopicRepoWrapper {
         self.0.get(topic_id).await
     }
 
+    async fn exists(&self, topic_id: TopicId) -> AppResult<bool, TopicRepoError> {
+        self.0.exists(topic_id).await
+    }
+
     async fn create(
         &self,
         name: String,
@@ -125,4 +130,8 @@ impl Deref for MockSetRepoWrapper {
     }
 }
 
-impl SetRepository for MockSetRepoWrapper {}
+impl SetRepository for MockSetRepoWrapper {
+    async fn create(&self, topic_id: TopicId, set_name: String, initial_entity_payloads: Vec<Value>) -> AppResult<TopicSet, SetRepoError> {
+        self.0.create(topic_id, set_name, initial_entity_payloads).await
+    }
+}

@@ -13,7 +13,6 @@ pub type EntityId = Uuid;
 pub struct Entity {
     pub id: Uuid,
     pub topic_id: Uuid,
-    pub set_id: Uuid,
     pub applied_identifiers: Vec<Uuid>, // TODO better way to store/identify these
     pub payload: Value,                 // this will be different later
 }

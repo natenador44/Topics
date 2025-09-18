@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{runtime::Handle, sync::RwLock};
 use tracing::{Level, debug, error, info, instrument, span};
+use crate::app::models::EntityId;
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let app_dir = PathBuf::from(
@@ -179,6 +180,11 @@ impl TopicRepository for FileTopicRepo {
         Ok(topics.iter().find(|t| t.id == topic_id).cloned())
     }
 
+    async fn exists(&self, topic_id: TopicId) -> AppResult<bool, TopicRepoError> {
+        let topics = self.topics.read().await;
+        Ok(topics.iter().any(|t| t.id == topic_id))
+    }
+
     #[instrument(skip_all, ret(level = "debug"), name = "repo#create")]
     async fn create(
         &self,
@@ -306,7 +312,7 @@ where
 }
 
 #[instrument(skip(data), fields(data_type = std::any::type_name::<T>()))]
-fn save_data<T>(path: &'static Path, data: &T) -> AppResult<(), SaveError>
+fn save_data<T>(path: &Path, data: &T) -> AppResult<(), SaveError>
 where
     T: Serialize,
 {
@@ -317,7 +323,7 @@ where
         .write(true)
         .open(path)
         .change_context(SaveError::Io)
-        .attach_with(|| path.display())?;
+        .attach_with(|| path.display().to_string())?;
 
     serde_json::to_writer(file, data).change_context(SaveError::Json)?;
     debug!("writing data complete");
@@ -333,7 +339,7 @@ impl SetRepository for FileSetRepo {
         &self,
         topic_id: TopicId,
         set_name: String,
-        initial_entities: Vec<Entity>,
+        initial_entity_payloads: Vec<Value>,
     ) -> AppResult<TopicSet, super::SetRepoError> {
         let set_id = TopicSetId::now_v7();
         let topic_dir = SETS_DIR.join(topic_id.to_string());
@@ -342,13 +348,28 @@ impl SetRepository for FileSetRepo {
                 .change_context(SetRepoError::Create)
                 .attach_with(|| topic_dir.display().to_string())?;
         }
+        
+        let mut entity_ids = Vec::with_capacity(initial_entity_payloads.len());
+        
+        let entities = initial_entity_payloads.into_iter()
+            .map(|p| {
+                let id = EntityId::now_v7();
+                entity_ids.push(id);
+                Entity {
+                    id,
+                    topic_id,
+                    applied_identifiers: vec![],
+                    payload: p,
+                } 
+            }).collect();
 
-        let set_file_path = topic_dir.join(set_id.to_string());
+        let mut set_file_path = topic_dir.join(set_id.to_string());
+        set_file_path.set_extension("json");
 
         let set = TopicSet {
             id: set_id,
             name: set_name,
-            entities: initial_entities,
+            entities,
         };
 
         save_data(&set_file_path, &set).change_context(SetRepoError::Create)?;

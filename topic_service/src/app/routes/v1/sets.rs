@@ -6,8 +6,9 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::fmt::Debug;
+use error_stack::{IntoReport, ResultExt};
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
@@ -22,6 +23,7 @@ use crate::{
     },
     error::{AppResult, ServiceError, SetServiceError},
 };
+use crate::app::models::TopicSet;
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -77,15 +79,16 @@ async fn create_set<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
     Json(set_request): Json<SetRequest>,
-) -> Result<Response, ServiceError<SetServiceError>>
+) -> Result<(StatusCode, Json<TopicSet>), ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
 {
-    service
+    let new_set = service
         .sets
-        .create(topic_id, set_request.name, set_request.entities)?;
+        .create(topic_id, set_request.name, set_request.entities).await?;
 
-    Ok(StatusCode::CREATED.into_response())
+
+    Ok((StatusCode::CREATED, Json(new_set)))
 }
 
 #[derive(Deserialize, ToSchema, Debug)]
