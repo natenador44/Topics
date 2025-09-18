@@ -1,4 +1,4 @@
-use crate::app::models::{TopicId, SetId};
+use crate::app::models::{SetId, TopicId};
 use crate::app::repository::{MockSetRepository, MockTopicRepository};
 use crate::app::routes;
 use crate::app::services::{Service, SetService, TopicService};
@@ -13,7 +13,7 @@ use serde_json::{Map, Number, Value, json};
 const TEST_SET_NAME: &str = "test";
 
 #[tokio::test]
-async fn create_set_returns_created_if_successful() {
+async fn create_set_success() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
 
@@ -43,6 +43,12 @@ async fn create_set_returns_created_if_successful() {
     .await;
 
     response.assert_status(StatusCode::CREATED);
+    response.assert_json(&json!({
+        "entities_url": format!("/api/v1/topics/{topic_id}/sets/{set_id}/entities"),
+        "id": set_id,
+        "topic_id": topic_id,
+        "name": TEST_SET_NAME,
+    }));
 }
 
 #[tokio::test]
@@ -165,7 +171,8 @@ async fn create_set_returns_internal_server_error_if_topic_repo_returns_error() 
         set_repo,
         topic_repo,
         json!({ "name": TEST_SET_NAME }),
-    ).await;
+    )
+    .await;
 
     response.assert_status_internal_server_error();
 }
@@ -178,14 +185,17 @@ async fn create_set_returns_internal_server_error_if_set_repo_returns_error() {
         .expect_create()
         .return_once(return_scenario::create::error);
     let mut topic_repo = MockTopicRepository::new();
-    topic_repo.expect_exists().return_once(return_scenario::topic_exists(true));
+    topic_repo
+        .expect_exists()
+        .return_once(return_scenario::topic_exists(true));
 
     let response = run_post_endpoint(
         &format!("/api/v1/topics/{topic_id}/sets"),
         set_repo,
         topic_repo,
         json!({ "name": TEST_SET_NAME }),
-    ).await;
+    )
+    .await;
 
     response.assert_status_internal_server_error();
 }
@@ -223,14 +233,144 @@ async fn create_set_entities_json_type_is_array() {
 }
 
 #[tokio::test]
-async fn get_set_returns_ok_and_set_if_successful() {
+async fn get_set_success() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
-    
+
     let mut set_repo = MockSetRepository::new();
-    set_repo.expect_get()
+    set_repo
+        .expect_get()
         .with(predicate::eq(topic_id), predicate::eq(set_id))
         .return_once(return_scenario::get::found(topic_id, set_id, TEST_SET_NAME));
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_exists(true));
+
+    let response = run_get_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_ok();
+    response.assert_json(&json!({
+        "id": set_id,
+        "topic_id": topic_id,
+        "name": TEST_SET_NAME
+    }));
+}
+
+#[tokio::test]
+async fn get_set_returns_not_found_if_topic_does_not_exist() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let set_repo = MockSetRepository::new();
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_exists(false));
+
+    let response = run_get_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_not_found();
+}
+
+#[tokio::test]
+async fn get_set_returns_not_found_if_set_does_not_exist() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let mut set_repo = MockSetRepository::new();
+    set_repo
+        .expect_get()
+        .with(predicate::eq(topic_id), predicate::eq(set_id))
+        .return_once(return_scenario::get::not_found);
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_exists(true));
+
+    let response = run_get_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_not_found();
+}
+
+#[tokio::test]
+async fn get_set_returns_internal_server_error_if_topic_repo_returns_error() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let set_repo = MockSetRepository::new();
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_error);
+
+    let response = run_get_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_internal_server_error();
+}
+
+#[tokio::test]
+async fn get_set_returns_internal_server_error_if_set_repo_returns_error() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let mut set_repo = MockSetRepository::new();
+    set_repo
+        .expect_get()
+        .return_once(return_scenario::get::error);
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_exists(true));
+
+    let response = run_get_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_internal_server_error();
+}
+
+async fn run_get_endpoint(
+    path: &str,
+    set_repo: MockSetRepository,
+    topic_repo: MockTopicRepository,
+) -> TestResponse {
+    let server = init_test_server(set_repo, topic_repo);
+
+    server.get(path).await
 }
 
 async fn run_post_endpoint<T>(
@@ -286,11 +426,11 @@ fn init_test_server(set_repo: MockSetRepository, topic_repo: MockTopicRepository
 }
 
 mod return_scenario {
-    use error_stack::IntoReport;
     use crate::app::models::Set;
-    use crate::app::models::{TopicId, SetId};
+    use crate::app::models::{SetId, TopicId};
     use crate::app::repository::{SetRepoError, TopicRepoError};
     use crate::error::AppResult;
+    use error_stack::IntoReport;
     use futures::FutureExt;
     use futures::future::BoxFuture;
     use serde_json::Value;
@@ -330,16 +470,33 @@ mod return_scenario {
             async { Err(SetRepoError::Create.into_report()) }.boxed()
         }
     }
-    
+
     pub mod get {
         use super::*;
-        pub fn found(topic_id: TopicId, set_id: SetId, name: impl ToString) -> impl FnOnce(TopicId, SetId) -> SetMockReturn<'static, Option<Set>> {
+        pub fn found(
+            topic_id: TopicId,
+            set_id: SetId,
+            name: impl ToString,
+        ) -> impl FnOnce(TopicId, SetId) -> SetMockReturn<'static, Option<Set>> {
             let name = name.to_string();
-            move |_, _| async move { Ok(Some(Set {
-                id: set_id,
-                topic_id,
-                name,
-            }))}.boxed()
+            move |_, _| {
+                async move {
+                    Ok(Some(Set {
+                        id: set_id,
+                        topic_id,
+                        name,
+                    }))
+                }
+                .boxed()
+            }
+        }
+
+        pub fn not_found<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, Option<Set>> {
+            async { Ok(None) }.boxed()
+        }
+
+        pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, Option<Set>> {
+            async { Err(SetRepoError::Get.into_report()) }.boxed()
         }
     }
 }
