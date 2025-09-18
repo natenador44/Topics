@@ -83,7 +83,6 @@ impl IntoResponse for CreateSetResponse {
     }
 }
 
-#[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     post,
     path = CREATE_SET_PATH,
@@ -96,26 +95,38 @@ impl IntoResponse for CreateSetResponse {
     ),
     request_body = SetRequest,
 )]
+#[instrument(skip(service, set_request), ret, err(Debug), fields(
+    req.name = set_request.name,
+    req.entity_count = set_request.entities.as_ref().map_or(0, Vec::len)
+))]
 async fn create_set<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
     Json(set_request): Json<SetRequest>,
-) -> Result<CreateSetResponse, ServiceError<SetServiceError>>
+) -> Result<Response, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
 {
-    let new_set = service
+    let result = service
         .sets
         .create(topic_id, set_request.name, set_request.entities)
-        .await?;
+        .await;
 
-    Ok(CreateSetResponse {
-        entities_url: format!(
-            "/api/v1/topics/{}/sets/{}/entities",
-            new_set.topic_id, new_set.id
-        ),
-        set: new_set,
-    })
+    match result {
+        Ok(new_set) => Ok(CreateSetResponse {
+            entities_url: format!(
+                "/api/v1/topics/{}/sets/{}/entities",
+                new_set.topic_id, new_set.id
+            ),
+            set: new_set,
+        }
+        .into_response()),
+        // TODO find a way to have ? automatically return a 404 response if this is true
+        Err(report) if matches!(report.current_context(), SetServiceError::TopicNotFound) => {
+            Ok(StatusCode::NOT_FOUND.into_response())
+        }
+        Err(other) => Err(other)?,
+    }
 }
 
 #[derive(Deserialize, ToSchema, Debug)]

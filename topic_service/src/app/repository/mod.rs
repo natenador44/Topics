@@ -30,6 +30,8 @@ pub enum TopicRepoError {
     Delete,
     #[error("failed to update topic")]
     Update,
+    #[error("failed to check if topic exists")]
+    Exists,
 }
 
 #[derive(Debug, thiserror::Error)]

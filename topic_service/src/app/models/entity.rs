@@ -1,11 +1,10 @@
-use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::app::models::IdentifierId;
-
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Copy, Clone)]
 #[repr(transparent)]
@@ -30,5 +29,5 @@ impl Display for EntityId {
 pub struct Entity {
     pub id: EntityId,
     pub applied_identifiers: Vec<IdentifierId>, // TODO better way to store/identify these
-    pub payload: Value,                 // this will be different later
+    pub payload: Value,                         // this will be different later
 }

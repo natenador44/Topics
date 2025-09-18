@@ -1,8 +1,8 @@
-use std::fmt::{Display, Formatter};
+use crate::app::models::TopicId;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
 use uuid::Uuid;
-use crate::app::models::TopicId;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Copy, Clone)]
 #[repr(transparent)]

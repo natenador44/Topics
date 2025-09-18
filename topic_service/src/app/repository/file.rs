@@ -344,6 +344,7 @@ struct TopicSetWithEntities<N: Into<String>> {
 }
 
 impl SetRepository for FileSetRepo {
+    #[instrument(skip_all, name = "repo#create")]
     async fn create(
         &self,
         topic_id: TopicId,

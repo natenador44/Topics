@@ -1,5 +1,6 @@
 use crate::app;
 use crate::app::models::TopicId;
+use crate::app::repository::MockSetRepository;
 use crate::app::services::SetService;
 use crate::app::{
     models::Topic,
@@ -13,7 +14,7 @@ use axum::http::StatusCode;
 use axum_test::{TestResponse, TestServer};
 use mockall::predicate;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Map, Number, Value, json};
 
 const DEFAULT_NAME: &str = "topic1";
 const DEFAULT_DESC: &str = "description1";
@@ -329,6 +330,77 @@ async fn create_returns_internal_server_error_if_repo_returns_error() {
 }
 
 #[tokio::test]
+async fn create_name_json_type_is_string() {
+    let invalid_name_json = [
+        Value::Array(vec![]),
+        Value::Object(Map::new()),
+        Value::Number(Number::from(2)),
+        Value::Number(Number::from_f64(1.2).unwrap()),
+        Value::Bool(true),
+        Value::Bool(false),
+    ];
+
+    for json in invalid_name_json {
+        let topic_repo = MockTopicRepository::new();
+
+        let response = run_post_endpoint(
+            "/api/v1/topics",
+            topic_repo,
+            json!({
+                    "name": json,
+            }),
+        )
+        .await;
+
+        response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
+#[tokio::test]
+async fn create_description_json_type_is_string() {
+    let invalid_name_json = [
+        Value::Array(vec![]),
+        Value::Object(Map::new()),
+        Value::Number(Number::from(2)),
+        Value::Number(Number::from_f64(1.2).unwrap()),
+        Value::Bool(true),
+        Value::Bool(false),
+    ];
+
+    for json in invalid_name_json {
+        let topic_repo = MockTopicRepository::new();
+
+        let response = run_post_endpoint(
+            "/api/v1/topics",
+            topic_repo,
+            json!({
+                "name": DEFAULT_NAME,
+                "description": json,
+            }),
+        )
+        .await;
+
+        response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
+#[tokio::test]
+async fn create_name_is_not_optional() {
+    let topic_repo = MockTopicRepository::new();
+
+    let response = run_post_endpoint(
+        "/api/v1/topics",
+        topic_repo,
+        &json!({
+            "description": DEFAULT_DESC,
+        }),
+    )
+    .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
 async fn create_description_is_optional() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -572,7 +644,9 @@ mod return_scenario {
         use super::*;
         use crate::app::models::TopicId;
 
-        pub fn not_found<'a>(_: TopicId) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
+        pub fn not_found<'a>(
+            _: TopicId,
+        ) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
             async { Ok(None) }.boxed()
         }
 
