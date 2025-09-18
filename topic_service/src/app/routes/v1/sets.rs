@@ -1,18 +1,18 @@
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::{StatusCode, Uri},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fmt::Debug;
-use error_stack::{IntoReport, ResultExt};
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
+use crate::app::models::TopicSet;
 use crate::{
     app::{
         models::{Entity, EntityId, TopicId, TopicSetId},
@@ -21,9 +21,8 @@ use crate::{
         services::Service,
         state::AppState,
     },
-    error::{AppResult, ServiceError, SetServiceError},
+    error::{ServiceError, SetServiceError},
 };
-use crate::app::models::TopicSet;
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -62,6 +61,27 @@ where
         .route(REMOVE_ENTITY_PATH, delete(delete_entity_in_set))
 }
 
+struct CreateSetResponse {
+    set: TopicSet,
+    entities_url: String,
+}
+
+impl IntoResponse for CreateSetResponse {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::CREATED,
+            Json(json!({
+                    "id": self.set.id,
+                    "topic_id": self.set.topic_id,
+                    "name": self.set.name,
+                    "entities_url": self.entities_url,
+                }
+            )),
+        )
+            .into_response()
+    }
+}
+
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     post,
@@ -79,16 +99,22 @@ async fn create_set<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
     Json(set_request): Json<SetRequest>,
-) -> Result<(StatusCode, Json<TopicSet>), ServiceError<SetServiceError>>
+) -> Result<CreateSetResponse, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
 {
     let new_set = service
         .sets
-        .create(topic_id, set_request.name, set_request.entities).await?;
+        .create(topic_id, set_request.name, set_request.entities)
+        .await?;
 
-
-    Ok((StatusCode::CREATED, Json(new_set)))
+    Ok(CreateSetResponse {
+        entities_url: format!(
+            "/api/v1/topics/{}/sets/{}/entities",
+            new_set.topic_id, new_set.id
+        ),
+        set: new_set,
+    })
 }
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -123,7 +149,7 @@ struct EntityResponse {
 async fn search_entities_in_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, TopicSetId)>,
-    Query(search): Query<EntitySearch>,
+    // Query(search): Query<EntitySearch>,
     Query(Pagination { page, page_size }): Query<Pagination>,
 ) -> Result<Response, ServiceError<SetServiceError>>
 where

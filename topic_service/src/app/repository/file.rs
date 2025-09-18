@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use crate::app::models::EntityId;
 use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
@@ -22,10 +23,9 @@ use crate::app::{
 use crate::error::AppResult;
 use error_stack::ResultExt;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::{runtime::Handle, sync::RwLock};
 use tracing::{Level, debug, error, info, instrument, span};
-use crate::app::models::EntityId;
 
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let app_dir = PathBuf::from(
@@ -348,31 +348,39 @@ impl SetRepository for FileSetRepo {
                 .change_context(SetRepoError::Create)
                 .attach_with(|| topic_dir.display().to_string())?;
         }
-        
+
         let mut entity_ids = Vec::with_capacity(initial_entity_payloads.len());
-        
-        let entities = initial_entity_payloads.into_iter()
+
+        let entities = initial_entity_payloads
+            .into_iter()
             .map(|p| {
                 let id = EntityId::now_v7();
                 entity_ids.push(id);
                 Entity {
                     id,
-                    topic_id,
                     applied_identifiers: vec![],
                     payload: p,
-                } 
-            }).collect();
+                }
+            })
+            .collect::<Vec<_>>();
 
         let mut set_file_path = topic_dir.join(set_id.to_string());
         set_file_path.set_extension("json");
 
+        save_data(
+            &set_file_path,
+            &json!({
+                "name": &set_name,
+                "entities": entities,
+            }),
+        )
+        .change_context(SetRepoError::Create)?;
+
         let set = TopicSet {
             id: set_id,
+            topic_id,
             name: set_name,
-            entities,
         };
-
-        save_data(&set_file_path, &set).change_context(SetRepoError::Create)?;
 
         Ok(set)
     }
