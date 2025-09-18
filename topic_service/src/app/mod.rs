@@ -1,7 +1,7 @@
+use crate::error::AppResult;
 use crate::{app::state::AppState, error::InitError};
 use axum::Router;
 use error_stack::ResultExt;
-use crate::error::AppResult;
 use tokio::net::TcpListener;
 use tracing::info;
 

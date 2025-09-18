@@ -38,7 +38,7 @@ pub struct ApiDoc;
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetRequest {
     name: String,
-    entities: Vec<Value>,
+    entities: Option<Vec<Value>>,
 }
 
 const CREATE_SET_PATH: &str = "/";
@@ -61,6 +61,7 @@ where
         .route(REMOVE_ENTITY_PATH, delete(delete_entity_in_set))
 }
 
+#[derive(ToSchema)]
 struct CreateSetResponse {
     set: TopicSet,
     entities_url: String,
@@ -87,11 +88,11 @@ impl IntoResponse for CreateSetResponse {
     post,
     path = CREATE_SET_PATH,
     responses(
-        (status = CREATED, description = "A set was successfully created", body = Uuid),
+        (status = CREATED, description = "A set was successfully created", body = CreateSetResponse),
         (status = NOT_FOUND, description = "The topic id does not exist"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The topic associated with the new set")
+        ("topic_id" = TopicId, Path, description = "The topic ID associated with the new set")
     ),
     request_body = SetRequest,
 )]
@@ -141,8 +142,8 @@ struct EntityResponse {
         (status = NOT_FOUND, description = "The topic id or the set id does not exist")
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The topic associated with the set"),
-        ("set_id" = Uuid, Path, description = "The set to search through")
+        ("topic_id" = TopicId, Path, description = "The topic associated with the set"),
+        ("set_id" = TopicSetId, Path, description = "The set to search through")
     ),
 )]
 // #[axum::debug_handler]
@@ -166,9 +167,9 @@ where
         (status = NOT_FOUND, description = "The topic id, set id, or entity id does not exist")
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The topic associated with the set the entity belongs to"),
-        ("set_id" = Uuid, Path, description = "The set the entity belongs to"),
-        ("entity_id" = Uuid, Path, description = "The entity to get")
+        ("topic_id" = TopicId, Path, description = "The topic associated with the set the entity belongs to"),
+        ("set_id" = TopicSetId, Path, description = "The set the entity belongs to"),
+        ("entity_id" = EntityId, Path, description = "The entity to get")
     ),
 )]
 async fn get_entity_in_set<T>(
@@ -186,12 +187,12 @@ where
     put,
     path = ADD_ENTITY_PATH,
     responses(
-        (status = CREATED, description = "The entity was created and added to the set. Returns the ID of the new entity", body = Uuid),
+        (status = CREATED, description = "The entity was created and added to the set. Returns the ID of the new entity", body = EntityId),
         (status = NOT_FOUND, description = "The topic id or the set id does not exist")
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The topic associated with the new set"),
-        ("set_id" = Uuid, Path, description = "The set to add the new entity to")
+        ("topic_id" = TopicId, Path, description = "The topic associated with the new set"),
+        ("set_id" = TopicSetId, Path, description = "The set to add the new entity to")
     ),
     request_body = SetRequest,
 )]
@@ -214,8 +215,8 @@ where
         (status = NOT_FOUND, description = "The topic id does not exist"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The topic associated with the set"),
-        ("set_id" = Uuid, Path, description = "The set to delete")
+        ("topic_id" = TopicId, Path, description = "The topic associated with the set"),
+        ("set_id" = TopicSetId, Path, description = "The set to delete")
     ),
 )]
 async fn delete_set<T>(
@@ -237,9 +238,9 @@ where
         (status = NOT_FOUND, description = "The topic id or set id does not exist"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The topic associated with the new set"),
-        ("set_id" = Uuid, Path, description = "The set to add the new entity to"),
-        ("entity_id" = Uuid, Path, description = "The id associated with the entity to remove")
+        ("topic_id" = TopicId, Path, description = "The topic associated with the new set"),
+        ("set_id" = TopicSetId, Path, description = "The set to add the new entity to"),
+        ("entity_id" = EntityId, Path, description = "The id associated with the entity to remove")
     ),
 )]
 async fn delete_entity_in_set<T>(

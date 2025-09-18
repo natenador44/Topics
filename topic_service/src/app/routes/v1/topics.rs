@@ -12,7 +12,6 @@ use serde::Deserialize;
 use tracing::{info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
-use uuid::Uuid;
 
 use crate::{
     app::{
@@ -119,7 +118,7 @@ where
         (status = NOT_FOUND, description = "No topics with the given TopicId were found"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The TopicId to find"),
+        ("topic_id" = TopicId, Path, description = "The TopicId to find"),
     )
 )]
 #[instrument(skip(service), ret, err(Debug))]
@@ -142,7 +141,7 @@ where
     post,
     path = TOPIC_CREATE_PATH,
     responses(
-        (status = CREATED, description = "A topic was successfully created", body = Uuid),
+        (status = CREATED, description = "A topic was successfully created", body = TopicId),
     ),
     request_body = TopicRequest
 )]
@@ -150,7 +149,7 @@ where
 pub async fn create_topic<T>(
     State(service): State<Service<T>>,
     Json(topic): Json<TopicRequest>,
-) -> Result<(StatusCode, Json<Uuid>), ServiceError<TopicServiceError>>
+) -> Result<(StatusCode, Json<TopicId>), ServiceError<TopicServiceError>>
 where
     T: Repository + Debug,
 {
@@ -166,7 +165,7 @@ where
         (status = NO_CONTENT, description = "The topic was successfully deleted, or never existed"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The ID of the topic to delete to delete")
+        ("topic_id" = TopicId, Path, description = "The ID of the topic to delete to delete")
     )
 )]
 #[instrument(skip(service), ret, err(Debug))]
@@ -190,7 +189,7 @@ where
         (status = NOT_FOUND, description = "The topic was not found so could not be updated"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The TopicId to patch")
+        ("topic_id" = TopicId, Path, description = "The TopicId to patch")
     ),
     request_body = TopicPatchRequest,
 )]

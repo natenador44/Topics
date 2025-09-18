@@ -57,7 +57,7 @@ pub trait TopicRepository {
         &self,
         topic_id: TopicId,
     ) -> impl Future<Output = AppResult<Option<Topic>, TopicRepoError>> + Send;
-    
+
     fn exists(
         &self,
         topic_id: TopicId,

@@ -14,7 +14,6 @@ use axum_test::{TestResponse, TestServer};
 use mockall::predicate;
 use serde::Serialize;
 use serde_json::json;
-use uuid::Uuid;
 
 const DEFAULT_NAME: &str = "topic1";
 const DEFAULT_DESC: &str = "description1";
@@ -218,7 +217,7 @@ async fn search_returns_internal_server_error_if_repo_returns_error() {
 
 #[tokio::test]
 async fn get_returns_not_found_if_no_topics_exist() {
-    let id = Uuid::now_v7();
+    let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
         .expect_get()
@@ -234,7 +233,7 @@ async fn get_returns_not_found_if_no_topics_exist() {
 async fn get_returns_json_topic_and_ok_status_if_topic_found() {
     let existing_topic = Topic::new_random_id(DEFAULT_NAME, DEFAULT_DESC);
 
-    let request_id = Uuid::now_v7();
+    let request_id = TopicId::new();
 
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -251,7 +250,7 @@ async fn get_returns_json_topic_and_ok_status_if_topic_found() {
 
 #[tokio::test]
 async fn get_returns_internal_server_error_if_repo_error_occurs() {
-    let request_id = Uuid::now_v7();
+    let request_id = TopicId::new();
 
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -278,7 +277,7 @@ async fn get_returns_bad_request_if_id_is_not_uuid() {
 
 #[tokio::test]
 async fn create_returns_created_status_and_new_id_if_creation_is_successful() {
-    let topic_id = TopicId::now_v7();
+    let topic_id = TopicId::new();
 
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -336,7 +335,7 @@ async fn create_description_is_optional() {
         .expect_create()
         .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(None))
         .once()
-        .return_once(return_scenario::create::success(Uuid::now_v7()));
+        .return_once(return_scenario::create::success(TopicId::new()));
 
     let response = run_post_endpoint(
         "/api/v1/topics",
@@ -352,7 +351,7 @@ async fn create_description_is_optional() {
 
 #[tokio::test]
 async fn delete_returns_no_content_if_no_error() {
-    let id = TopicId::now_v7();
+    let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
         .expect_delete()
@@ -377,7 +376,7 @@ async fn delete_returns_bad_request_if_id_is_invalid() {
 
 #[tokio::test]
 async fn delete_returns_internal_server_error_if_repo_returns_error() {
-    let id = TopicId::now_v7();
+    let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
         .expect_delete()
@@ -393,7 +392,7 @@ async fn delete_returns_internal_server_error_if_repo_returns_error() {
 async fn update_returns_ok_and_updated_topic_if_no_error() {
     let new_name = String::from("different name");
     let new_desc = String::from("different description");
-    let id = TopicId::now_v7();
+    let id = TopicId::new();
     let updated_topic = Topic::new(id, new_name.clone(), Some(new_desc.clone()));
 
     let mut topic_repo = MockTopicRepository::new();
@@ -437,7 +436,7 @@ async fn update_returns_bad_request_if_id_is_invalid() {
 
 #[tokio::test]
 async fn update_returns_internal_server_error_if_repo_returns_error() {
-    let request_id = TopicId::now_v7();
+    let request_id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
         .expect_update()
@@ -458,7 +457,7 @@ async fn update_returns_internal_server_error_if_repo_returns_error() {
 
 #[tokio::test]
 async fn update_returns_not_found_if_topic_id_does_not_exist() {
-    let id = TopicId::now_v7();
+    let id = TopicId::new();
 
     let mut topic_repo = MockTopicRepository::new();
 
@@ -572,9 +571,8 @@ mod return_scenario {
     pub mod get {
         use super::*;
         use crate::app::models::TopicId;
-        use uuid::Uuid;
 
-        pub fn not_found<'a>(_: Uuid) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
+        pub fn not_found<'a>(_: TopicId) -> BoxFuture<'a, AppResult<Option<Topic>, TopicRepoError>> {
             async { Ok(None) }.boxed()
         }
 

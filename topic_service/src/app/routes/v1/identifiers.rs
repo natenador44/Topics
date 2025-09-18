@@ -60,7 +60,7 @@ where
         (status = NOT_FOUND, description = "The topic id does not exist")
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The id of the topic associated with the identifier"),
+        ("topic_id" = TopicId, Path, description = "The id of the topic associated with the identifier"),
         ("page" = Option<usize>, Query, description = "Select certain page of results"),
         ("page_size" = Option<usize>, Query, description = "Max number of results to return per page. Defaults to ..."),
         ("name" = Option<String>, Query, description = "Filter identifiers by name"),
@@ -83,8 +83,8 @@ async fn search_identifiers(
         (status = NOT_FOUND, description = "The topic id or identifier id does not exist"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The id of the topic associated with the identifier"),
-        ("identifier_id" = Uuid, Path, description = "The id of the identifier to find"),
+        ("topic_id" = TopicId, Path, description = "The id of the topic associated with the identifier"),
+        ("identifier_id" = IdentifierId, Path, description = "The id of the identifier to find"),
     )
 )]
 async fn get_identifier(
@@ -97,11 +97,11 @@ async fn get_identifier(
     post,
     path = IDENTIFIER_CREATE_PATH,
     responses(
-        (status = CREATED, description = "An identifier was successfully created", body = Uuid),
+        (status = CREATED, description = "An identifier was successfully created", body = IdentifierId),
         (status = NOT_FOUND, description = "The topic id does not exist")
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The id of the topic associated with the identifier"),
+        ("topic_id" = TopicId, Path, description = "The id of the topic associated with the identifier"),
     ),
     request_body = IdentifierRequest
 )]
@@ -120,8 +120,8 @@ async fn create_identifier(
         (status = NOT_FOUND, description = "The topic id or identifier id was not found so could not be updated"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The id of the topic associated with the identifier"),
-        ("identifier_id" = Uuid, Path, description = "The id of the identifier to update")
+        ("topic_id" = TopicId, Path, description = "The id of the topic associated with the identifier"),
+        ("identifier_id" = IdentifierId, Path, description = "The id of the identifier to update")
     ),
     request_body = IdentifierRequest,
 )]
@@ -141,8 +141,8 @@ async fn update_identifier(
         (status = NOT_FOUND, description = "The topic id does not exist"),
     ),
     params(
-        ("topic_id" = Uuid, Path, description = "The id of the topic associated with the identifier"),
-        ("identifier_id" = Uuid, Path, description = "The id of the identifier to delete")
+        ("topic_id" = TopicId, Path, description = "The id of the topic associated with the identifier"),
+        ("identifier_id" = IdentifierId, Path, description = "The id of the identifier to delete")
     )
 )]
 async fn delete_identifier(

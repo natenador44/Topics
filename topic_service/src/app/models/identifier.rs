@@ -1,13 +1,30 @@
+use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+use crate::app::models::TopicId;
 
-pub type IdentifierId = Uuid;
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Copy, Clone)]
+#[repr(transparent)]
+#[serde(transparent)]
+#[schema(as = uuid::Uuid)]
+pub struct IdentifierId(Uuid);
+impl IdentifierId {
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
+impl Display for IdentifierId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Identifier {
-    pub id: Uuid,
-    pub topic_id: Uuid,
+    pub id: IdentifierId,
+    pub topic_id: TopicId,
     // some sort of expression to 'test' data
 }
 

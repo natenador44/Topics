@@ -1,9 +1,7 @@
 //! All tests in this module are intended to test the contract made by the API,
 //! e.g. return codes, handling query parameters, handling path parameters.
-use crate::error::AppResult;
-use std::{ops::Deref, sync::Arc};
-use serde_json::Value;
 use crate::app::models::{Entity, EntityId, TopicId, TopicSet, TopicSetId};
+use crate::app::repository::SetRepoError;
 use crate::app::{
     models::Topic,
     repository::{
@@ -11,7 +9,9 @@ use crate::app::{
         Repository, SetRepository, TopicFilter, TopicRepoError, TopicRepository,
     },
 };
-use crate::app::repository::SetRepoError;
+use crate::error::AppResult;
+use serde_json::Value;
+use std::{ops::Deref, sync::Arc};
 
 mod v1;
 
@@ -26,8 +26,8 @@ impl MockRepo {
         Self::new(topic_repo, MockSetRepository::new())
     }
 
-    fn for_sets_test(set_repo: MockSetRepository) -> Self {
-        Self::new(MockTopicRepository::new(), set_repo)
+    fn for_sets_test(set_repo: MockSetRepository, topic_repo: MockTopicRepository) -> Self {
+        Self::new(topic_repo, set_repo)
     }
 
     fn new(topic_repo: MockTopicRepository, set_repo: MockSetRepository) -> Self {
@@ -54,7 +54,7 @@ impl Repository for MockRepo {
     }
 
     fn sets(&self) -> Self::SetRepo {
-        todo!()
+        self.set_repo.clone()
     }
 }
 
@@ -131,7 +131,14 @@ impl Deref for MockSetRepoWrapper {
 }
 
 impl SetRepository for MockSetRepoWrapper {
-    async fn create(&self, topic_id: TopicId, set_name: String, initial_entity_payloads: Vec<Value>) -> AppResult<TopicSet, SetRepoError> {
-        self.0.create(topic_id, set_name, initial_entity_payloads).await
+    async fn create(
+        &self,
+        topic_id: TopicId,
+        set_name: String,
+        initial_entity_payloads: Vec<Value>,
+    ) -> AppResult<TopicSet, SetRepoError> {
+        self.0
+            .create(topic_id, set_name, initial_entity_payloads)
+            .await
     }
 }

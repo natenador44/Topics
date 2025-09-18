@@ -191,7 +191,7 @@ impl TopicRepository for FileTopicRepo {
         name: String,
         description: Option<String>,
     ) -> AppResult<TopicId, TopicRepoError> {
-        let new_id = TopicId::now_v7();
+        let new_id = TopicId::new();
         let new_topic = Topic::new(new_id, name, description);
         let mut topics = self.topics.write().await;
         topics.push(new_topic);
@@ -334,6 +334,15 @@ where
 pub struct FileIdentifierRepo;
 impl IdentifierRepository for FileIdentifierRepo {}
 pub struct FileSetRepo;
+
+/// The set name and the entities in the set are stored in the same file.
+/// This struct represents the contents of that file, and is used to read and write to it.
+#[derive(Serialize, Deserialize)]
+struct TopicSetWithEntities<N: Into<String>> {
+    name: N,
+    entities: Vec<Entity>,
+}
+
 impl SetRepository for FileSetRepo {
     async fn create(
         &self,
@@ -341,7 +350,7 @@ impl SetRepository for FileSetRepo {
         set_name: String,
         initial_entity_payloads: Vec<Value>,
     ) -> AppResult<TopicSet, super::SetRepoError> {
-        let set_id = TopicSetId::now_v7();
+        let set_id = TopicSetId::new();
         let topic_dir = SETS_DIR.join(topic_id.to_string());
         if !topic_dir.exists() {
             std::fs::create_dir(&topic_dir)
@@ -354,7 +363,7 @@ impl SetRepository for FileSetRepo {
         let entities = initial_entity_payloads
             .into_iter()
             .map(|p| {
-                let id = EntityId::now_v7();
+                let id = EntityId::new();
                 entity_ids.push(id);
                 Entity {
                     id,
@@ -369,10 +378,10 @@ impl SetRepository for FileSetRepo {
 
         save_data(
             &set_file_path,
-            &json!({
-                "name": &set_name,
-                "entities": entities,
-            }),
+            &TopicSetWithEntities {
+                name: &set_name,
+                entities,
+            },
         )
         .change_context(SetRepoError::Create)?;
 
