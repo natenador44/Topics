@@ -476,6 +476,33 @@ async fn delete_returns_not_found_if_topic_does_not_exist() {
     response.assert_status_not_found();
 }
 
+#[tokio::test]
+async fn delete_returns_not_found_if_set_does_not_exist() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let mut set_repo = MockSetRepository::new();
+    set_repo
+        .expect_delete()
+        .with(predicate::eq(topic_id), predicate::eq(set_id))
+        .return_once(return_scenario::delete::not_found);
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_exists(true));
+
+    let response = run_delete_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_not_found();
+}
+
 async fn run_get_endpoint(
     path: &str,
     set_repo: MockSetRepository,
@@ -542,6 +569,7 @@ mod return_scenario {
     use crate::app::models::Set;
     use crate::app::models::{SetId, TopicId};
     use crate::app::repository::{SetRepoError, TopicRepoError};
+    use crate::app::services::ResourceOutcome;
     use crate::error::AppResult;
     use error_stack::IntoReport;
     use futures::FutureExt;
@@ -616,11 +644,15 @@ mod return_scenario {
     pub mod delete {
         use super::*;
 
-        pub fn success<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ()> {
-            async { Ok(()) }.boxed()
+        pub fn success<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ResourceOutcome> {
+            async { Ok(ResourceOutcome::Found) }.boxed()
         }
 
-        pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ()> {
+        pub fn not_found<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ResourceOutcome> {
+            async { Ok(ResourceOutcome::NotFound) }.boxed()
+        }
+
+        pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ResourceOutcome> {
             async { Err(SetRepoError::Delete.into_report()) }.boxed()
         }
     }

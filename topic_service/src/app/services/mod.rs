@@ -19,8 +19,9 @@ pub struct Service<T> {
 }
 
 /// Used for service methods that only need to report if
-/// a resource exists (or existed). This can be used by the route layer
-/// to return the correct response to the user
+/// a resource exists (or existed), but don't need to get a representation of that data.
+/// This can be used by the route layer to return the correct response to the user
+#[derive(Debug)]
 pub enum ResourceOutcome {
     Found,
     NotFound,

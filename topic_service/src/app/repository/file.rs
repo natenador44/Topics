@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::app::models::EntityId;
+use crate::app::services::ResourceOutcome;
 use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
@@ -205,11 +206,20 @@ impl TopicRepository for FileTopicRepo {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "repo#delete")]
-    async fn delete(&self, topic_id: TopicId) -> AppResult<(), TopicRepoError> {
+    async fn delete(&self, topic_id: TopicId) -> AppResult<ResourceOutcome, TopicRepoError> {
         let mut topics = self.topics.write().await;
-        topics.retain(|t| t.id != topic_id);
-        self.send_update(topic_id, TopicUpdateType::Delete);
-        Ok(())
+        let pos = topics.iter().position(|t| t.id == topic_id);
+
+        let outcome = match pos {
+            Some(i) => {
+                topics.remove(i);
+                self.send_update(topic_id, TopicUpdateType::Delete);
+                ResourceOutcome::Found
+            }
+            None => ResourceOutcome::NotFound,
+        };
+
+        Ok(outcome)
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "repo#update")]
@@ -453,16 +463,21 @@ impl SetRepository for FileSetRepo {
     }
 
     #[instrument(skip_all, name = "repo#delete")]
-    async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetRepoError> {
+    async fn delete(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> AppResult<ResourceOutcome, SetRepoError> {
         let _guard = self.lock.write().await;
         let set_file_path = generate_set_file_path(topic_id, set_id);
 
         if set_file_path.exists() {
             tokio::fs::remove_file(set_file_path)
                 .await
-                .change_context(SetRepoError::Delete)
+                .change_context(SetRepoError::Delete)?;
+            Ok(ResourceOutcome::Found)
         } else {
-            Ok(())
+            Ok(ResourceOutcome::NotFound)
         }
     }
 }

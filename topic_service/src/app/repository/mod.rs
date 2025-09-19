@@ -5,6 +5,7 @@ use serde_json::Value;
 use crate::error::AppResult;
 
 use crate::app::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
+use crate::app::services::ResourceOutcome;
 
 pub mod file;
 
@@ -78,7 +79,7 @@ pub trait TopicRepository {
     fn delete(
         &self,
         topic_id: TopicId,
-    ) -> impl Future<Output = AppResult<(), TopicRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<ResourceOutcome, TopicRepoError>> + Send;
 
     fn update(
         &self,
@@ -110,5 +111,5 @@ pub trait SetRepository {
         &self,
         topic_id: TopicId,
         set_id: SetId,
-    ) -> impl Future<Output = AppResult<(), SetRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<ResourceOutcome, SetRepoError>> + Send;
 }

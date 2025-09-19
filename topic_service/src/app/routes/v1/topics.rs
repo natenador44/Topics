@@ -14,6 +14,7 @@ use tracing::{info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
+use crate::app::services::ResourceOutcome;
 use crate::{
     app::{
         models::{Topic, TopicId},
@@ -241,8 +242,10 @@ pub async fn delete_topic<T>(
 where
     T: Repository + Debug,
 {
-    service.topics.delete(topic_id).await?;
-    Ok(StatusCode::NO_CONTENT)
+    match service.topics.delete(topic_id).await? {
+        ResourceOutcome::Found => Ok(StatusCode::NO_CONTENT),
+        ResourceOutcome::NotFound => Ok(StatusCode::NOT_FOUND),
+    }
 }
 
 /// Update the topic associated with the given id using the given information.

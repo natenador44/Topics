@@ -1,4 +1,5 @@
 use crate::app::models::TopicId;
+use crate::app::services::ResourceOutcome;
 use crate::error::AppResult;
 use crate::{
     app::{
@@ -76,7 +77,7 @@ impl<T: Repository> TopicService<T> {
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "service#delete")]
-    pub async fn delete(&self, topic_id: TopicId) -> AppResult<(), TopicServiceError> {
+    pub async fn delete(&self, topic_id: TopicId) -> AppResult<ResourceOutcome, TopicServiceError> {
         self.repo
             .topics()
             .delete(topic_id)

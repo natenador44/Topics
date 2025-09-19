@@ -2,6 +2,7 @@
 //! e.g. return codes, handling query parameters, handling path parameters.
 use crate::app::models::{Entity, EntityId, Set, SetId, TopicId};
 use crate::app::repository::SetRepoError;
+use crate::app::services::ResourceOutcome;
 use crate::app::{
     models::Topic,
     repository::{
@@ -94,7 +95,7 @@ impl TopicRepository for MockTopicRepoWrapper {
         self.0.create(name, description).await
     }
 
-    async fn delete(&self, topic_id: TopicId) -> AppResult<(), TopicRepoError> {
+    async fn delete(&self, topic_id: TopicId) -> AppResult<ResourceOutcome, TopicRepoError> {
         self.0.delete(topic_id).await
     }
 
@@ -146,7 +147,11 @@ impl SetRepository for MockSetRepoWrapper {
         self.0.get(topic_id, set_id).await
     }
 
-    async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetRepoError> {
+    async fn delete(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> AppResult<ResourceOutcome, SetRepoError> {
         self.0.delete(topic_id, set_id).await
     }
 }

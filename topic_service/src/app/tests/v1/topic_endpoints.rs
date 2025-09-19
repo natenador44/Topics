@@ -489,6 +489,20 @@ async fn delete_returns_no_content_if_no_error() {
 }
 
 #[tokio::test]
+async fn delete_returns_not_found_if_topic_does_not_exist() {
+    let id = TopicId::new();
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_delete()
+        .with(predicate::eq(id))
+        .return_once(return_scenario::delete::not_found);
+
+    let response = run_delete_endpoint(&format!("/api/v1/topics/{id}"), topic_repo).await;
+
+    response.assert_status_not_found();
+}
+
+#[tokio::test]
 async fn delete_returns_bad_request_if_id_is_invalid() {
     let request_id = "bad_id";
 
@@ -738,12 +752,21 @@ mod return_scenario {
     pub mod delete {
         use super::*;
         use crate::app::models::TopicId;
+        use crate::app::services::ResourceOutcome;
 
-        pub fn success<'a>(_: TopicId) -> BoxFuture<'a, AppResult<(), TopicRepoError>> {
-            async { Ok(()) }.boxed()
+        pub fn success<'a>(
+            _: TopicId,
+        ) -> BoxFuture<'a, AppResult<ResourceOutcome, TopicRepoError>> {
+            async { Ok(ResourceOutcome::Found) }.boxed()
         }
 
-        pub fn error<'a>(_: TopicId) -> BoxFuture<'a, AppResult<(), TopicRepoError>> {
+        pub fn not_found<'a>(
+            _: TopicId,
+        ) -> BoxFuture<'a, AppResult<ResourceOutcome, TopicRepoError>> {
+            async { Ok(ResourceOutcome::NotFound) }.boxed()
+        }
+
+        pub fn error<'a>(_: TopicId) -> BoxFuture<'a, AppResult<ResourceOutcome, TopicRepoError>> {
             async { Err(TopicRepoError::Delete.into_report()) }.boxed()
         }
     }

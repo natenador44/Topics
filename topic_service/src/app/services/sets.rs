@@ -105,8 +105,7 @@ where
             .sets()
             .delete(topic_id, set_id)
             .await
-            .change_context(SetServiceError)?;
-        Ok(ResourceOutcome::Found)
+            .change_context(SetServiceError)
     }
 
     /*
