@@ -68,8 +68,7 @@ impl<T: Repository> TopicService<T> {
         name: String,
         description: Option<String>,
     ) -> AppResult<Topic, TopicServiceError> {
-        self
-            .repo
+        self.repo
             .topics()
             .create(name, description)
             .await

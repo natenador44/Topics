@@ -18,6 +18,14 @@ pub struct Service<T> {
     pub sets: SetService<T>,
 }
 
+/// Used for service methods that only need to report if
+/// a resource exists (or existed). This can be used by the route layer
+/// to return the correct response to the user
+pub enum ResourceOutcome {
+    Found,
+    NotFound,
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error("failed to create service")]
 pub struct ServiceBuildError;

@@ -16,6 +16,7 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::app::models::Set;
+use crate::app::services::ResourceOutcome;
 use crate::error::TopicServiceError;
 use crate::{
     app::{
@@ -271,8 +272,8 @@ where
     delete,
     path = DELETE_SET_PATH,
     responses(
-        (status = NO_CONTENT, description = "The set was deleted or never existed"),
-        (status = NOT_FOUND, description = "The topic id does not exist"),
+        (status = NO_CONTENT, description = "The set was deleted"),
+        (status = NOT_FOUND, description = "The topic id or set id does not exist"),
     ),
     params(
         ("topic_id" = TopicId, Path, description = "The topic associated with the set"),
@@ -287,8 +288,10 @@ async fn delete_set<T>(
 where
     T: Repository + Debug,
 {
-    service.sets.delete(topic_id, set_id).await?;
-    Ok(StatusCode::NO_CONTENT)
+    match service.sets.delete(topic_id, set_id).await? {
+        ResourceOutcome::Found => Ok(StatusCode::NO_CONTENT),
+        ResourceOutcome::NotFound => Ok(StatusCode::NOT_FOUND),
+    }
 }
 
 #[instrument(level=Level::DEBUG)]

@@ -1,5 +1,6 @@
 use crate::app::models::{EntityId, Set};
 use crate::app::repository::{Repository, SetRepository, TopicRepoError, TopicRepository};
+use crate::app::services::ResourceOutcome;
 use crate::{
     app::models::{Entity, SetId, TopicId},
     error::{AppResult, SetServiceError},
@@ -12,6 +13,9 @@ use tracing::{debug, info, instrument};
 pub struct SetService<T> {
     repo: T,
 }
+
+// TODO have all `delete` operations return a not-found-like response if any of the
+// requested resources do not exist
 
 impl<T> SetService<T>
 where
@@ -82,10 +86,27 @@ where
             .await
             .change_context(SetServiceError)
     }
-    
-    pub async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetServiceError> {
-        self.repo.sets().delete(topic_id, set_id).await
-            .change_context(SetServiceError)
+
+    #[instrument(skip_all, name = "service#delete")]
+    pub async fn delete(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> AppResult<ResourceOutcome, SetServiceError> {
+        let topic_exists = self
+            .topic_exists(topic_id)
+            .await
+            .change_context(SetServiceError)?;
+
+        if !topic_exists {
+            return Ok(ResourceOutcome::NotFound);
+        }
+        self.repo
+            .sets()
+            .delete(topic_id, set_id)
+            .await
+            .change_context(SetServiceError)?;
+        Ok(ResourceOutcome::Found)
     }
 
     /*

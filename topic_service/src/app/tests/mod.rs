@@ -147,6 +147,6 @@ impl SetRepository for MockSetRepoWrapper {
     }
 
     async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetRepoError> {
-        self.0.delete(topic_id, set_id).await 
+        self.0.delete(topic_id, set_id).await
     }
 }

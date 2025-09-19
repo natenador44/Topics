@@ -130,7 +130,9 @@ impl Repository for FileRepo {
     }
 
     fn sets(&self) -> Self::SetRepo {
-        FileSetRepo { lock: Arc::clone(&self.set_lock)}
+        FileSetRepo {
+            lock: Arc::clone(&self.set_lock),
+        }
     }
 }
 
@@ -450,12 +452,15 @@ impl SetRepository for FileSetRepo {
         }))
     }
 
+    #[instrument(skip_all, name = "repo#delete")]
     async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetRepoError> {
         let _guard = self.lock.write().await;
         let set_file_path = generate_set_file_path(topic_id, set_id);
 
         if set_file_path.exists() {
-            tokio::fs::remove_file(set_file_path).await.change_context(SetRepoError::Delete)
+            tokio::fs::remove_file(set_file_path)
+                .await
+                .change_context(SetRepoError::Delete)
         } else {
             Ok(())
         }

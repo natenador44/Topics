@@ -318,7 +318,11 @@ async fn get_returns_bad_request_if_id_is_not_uuid() {
 async fn create_success() {
     let topic_id = TopicId::new();
 
-    let new_topic = Topic::new(topic_id, DEFAULT_NAME.to_owned(), Some(DEFAULT_DESC.to_owned()));
+    let new_topic = Topic::new(
+        topic_id,
+        DEFAULT_NAME.to_owned(),
+        Some(DEFAULT_DESC.to_owned()),
+    );
 
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -453,7 +457,10 @@ async fn create_description_is_optional() {
         .expect_create()
         .with(predicate::eq(DEFAULT_NAME.to_string()), predicate::eq(None))
         .once()
-        .return_once(return_scenario::create::success(Topic::new_random_id(DEFAULT_NAME, DEFAULT_DESC)));
+        .return_once(return_scenario::create::success(Topic::new_random_id(
+            DEFAULT_NAME,
+            DEFAULT_DESC,
+        )));
 
     let response = run_post_endpoint(
         "/api/v1/topics",

@@ -105,7 +105,7 @@ pub trait SetRepository {
         topic_id: TopicId,
         set_id: SetId,
     ) -> impl Future<Output = AppResult<Option<Set>, SetRepoError>> + Send;
-    
+
     fn delete(
         &self,
         topic_id: TopicId,

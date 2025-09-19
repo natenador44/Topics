@@ -12,6 +12,8 @@ use serde_json::{Map, Number, Value, json};
 
 const TEST_SET_NAME: &str = "test";
 
+// TODO test rejection of all endpoints if topic id or set id is not a UUID
+
 #[tokio::test]
 async fn create_set_success() {
     let topic_id = TopicId::new();
@@ -365,6 +367,115 @@ async fn get_set_returns_internal_server_error_if_set_repo_returns_error() {
     response.assert_status_internal_server_error();
 }
 
+#[tokio::test]
+async fn delete_success() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let mut set_repo = MockSetRepository::new();
+    set_repo
+        .expect_delete()
+        .return_once(return_scenario::delete::success);
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .return_once(return_scenario::topic_exists(true));
+
+    let response = run_delete_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status(StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn delete_bad_request_if_topic_id_not_uuid() {
+    let set_id = SetId::new();
+
+    let set_repo = MockSetRepository::new();
+
+    let topic_repo = MockTopicRepository::new();
+
+    let response = run_delete_endpoint(
+        &format!("/api/v1/topics/notauuid/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_bad_request();
+}
+
+#[tokio::test]
+async fn delete_bad_request_if_set_id_not_uuid() {
+    let topic_id = TopicId::new();
+
+    let set_repo = MockSetRepository::new();
+
+    let topic_repo = MockTopicRepository::new();
+
+    let response = run_delete_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/notauuid"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_bad_request();
+}
+
+#[tokio::test]
+async fn delete_returns_error_if_repo_returns_error() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let mut set_repo = MockSetRepository::new();
+    set_repo
+        .expect_delete()
+        .return_once(return_scenario::delete::error);
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .return_once(return_scenario::topic_exists(true));
+
+    let response = run_delete_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_internal_server_error();
+}
+
+#[tokio::test]
+async fn delete_returns_not_found_if_topic_does_not_exist() {
+    let topic_id = TopicId::new();
+    let set_id = SetId::new();
+
+    let set_repo = MockSetRepository::new();
+
+    let mut topic_repo = MockTopicRepository::new();
+    topic_repo
+        .expect_exists()
+        .with(predicate::eq(topic_id))
+        .return_once(return_scenario::topic_exists(false));
+
+    let response = run_delete_endpoint(
+        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
+        set_repo,
+        topic_repo,
+    )
+    .await;
+
+    response.assert_status_not_found();
+}
+
 async fn run_get_endpoint(
     path: &str,
     set_repo: MockSetRepository,
@@ -499,6 +610,18 @@ mod return_scenario {
 
         pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, Option<Set>> {
             async { Err(SetRepoError::Get.into_report()) }.boxed()
+        }
+    }
+
+    pub mod delete {
+        use super::*;
+
+        pub fn success<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ()> {
+            async { Ok(()) }.boxed()
+        }
+
+        pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, ()> {
+            async { Err(SetRepoError::Delete.into_report()) }.boxed()
         }
     }
 }
