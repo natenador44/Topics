@@ -65,6 +65,7 @@ pub struct FileRepo {
     /// Used to send notifications to the update thread, which gets a read lock of `topics` and
     /// saves them to `TOPICS_FILE`
     topic_updates: Sender<TopicUpdate>,
+    set_lock: Arc<RwLock<()>>,
 }
 
 impl FileRepo {
@@ -79,6 +80,7 @@ impl FileRepo {
         Ok(Self {
             topics,
             topic_updates: tx,
+            set_lock: Arc::new(RwLock::new(())),
         })
     }
 }
@@ -128,7 +130,7 @@ impl Repository for FileRepo {
     }
 
     fn sets(&self) -> Self::SetRepo {
-        FileSetRepo
+        FileSetRepo { lock: Arc::clone(&self.set_lock)}
     }
 }
 
@@ -190,14 +192,14 @@ impl TopicRepository for FileTopicRepo {
         &self,
         name: String,
         description: Option<String>,
-    ) -> AppResult<TopicId, TopicRepoError> {
+    ) -> AppResult<Topic, TopicRepoError> {
         let new_id = TopicId::new();
         let new_topic = Topic::new(new_id, name, description);
         let mut topics = self.topics.write().await;
-        topics.push(new_topic);
+        topics.push(new_topic.clone());
         self.send_update(new_id, TopicUpdateType::Create);
 
-        Ok(new_id)
+        Ok(new_topic)
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "repo#delete")]
@@ -355,7 +357,9 @@ where
 
 pub struct FileIdentifierRepo;
 impl IdentifierRepository for FileIdentifierRepo {}
-pub struct FileSetRepo;
+pub struct FileSetRepo {
+    lock: Arc<RwLock<()>>,
+}
 
 /// The set name and the entities in the set are stored in the same file.
 /// This struct represents the contents of that file, and is used to read and write to it.
@@ -374,6 +378,9 @@ impl SetRepository for FileSetRepo {
         initial_entity_payloads: Vec<Value>,
     ) -> AppResult<Set, SetRepoError> {
         let topic_dir = SETS_DIR.join(topic_id.to_string());
+
+        let _guard = self.lock.write().await;
+
         if !topic_dir.exists() {
             std::fs::create_dir(&topic_dir)
                 .change_context(SetRepoError::Create)
@@ -420,6 +427,8 @@ impl SetRepository for FileSetRepo {
 
     #[instrument(skip_all, name = "repo#get")]
     async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Option<Set>, SetRepoError> {
+        let _guard = self.lock.read().await;
+
         let set_file_path = generate_set_file_path(topic_id, set_id);
 
         if !set_file_path.exists() {
@@ -439,6 +448,17 @@ impl SetRepository for FileSetRepo {
             topic_id,
             name,
         }))
+    }
+
+    async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetRepoError> {
+        let _guard = self.lock.write().await;
+        let set_file_path = generate_set_file_path(topic_id, set_id);
+
+        if set_file_path.exists() {
+            tokio::fs::remove_file(set_file_path).await.change_context(SetRepoError::Delete)
+        } else {
+            Ok(())
+        }
     }
 }
 

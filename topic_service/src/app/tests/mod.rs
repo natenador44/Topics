@@ -90,7 +90,7 @@ impl TopicRepository for MockTopicRepoWrapper {
         &self,
         name: String,
         description: Option<String>,
-    ) -> AppResult<TopicId, TopicRepoError> {
+    ) -> AppResult<Topic, TopicRepoError> {
         self.0.create(name, description).await
     }
 
@@ -144,5 +144,9 @@ impl SetRepository for MockSetRepoWrapper {
 
     async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Option<Set>, SetRepoError> {
         self.0.get(topic_id, set_id).await
+    }
+
+    async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetRepoError> {
+        self.0.delete(topic_id, set_id).await 
     }
 }

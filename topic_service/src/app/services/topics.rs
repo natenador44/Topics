@@ -67,15 +67,13 @@ impl<T: Repository> TopicService<T> {
         &self,
         name: String,
         description: Option<String>,
-    ) -> AppResult<TopicId, TopicServiceError> {
-        let new_id = self
+    ) -> AppResult<Topic, TopicServiceError> {
+        self
             .repo
             .topics()
             .create(name, description)
             .await
-            .change_context(TopicServiceError)?;
-
-        Ok(new_id)
+            .change_context(TopicServiceError)
     }
 
     #[instrument(skip_all, ret(level = "debug"), name = "service#delete")]

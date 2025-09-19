@@ -82,6 +82,11 @@ where
             .await
             .change_context(SetServiceError)
     }
+    
+    pub async fn delete(&self, topic_id: TopicId, set_id: SetId) -> AppResult<(), SetServiceError> {
+        self.repo.sets().delete(topic_id, set_id).await
+            .change_context(SetServiceError)
+    }
 
     /*
     Checking this way adds more database reads (potentially, we'll see when the cache comes in)

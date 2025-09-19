@@ -164,6 +164,7 @@ where
     ),
 )]
 // #[axum::debug_handler]
+#[instrument(skip(service), ret, err(Debug))]
 async fn get_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, SetId)>,
@@ -266,7 +267,6 @@ where
     todo!()
 }
 
-#[instrument(level=Level::DEBUG)]
 #[utoipa::path(
     delete,
     path = DELETE_SET_PATH,
@@ -279,6 +279,7 @@ where
         ("set_id" = SetId, Path, description = "The set to delete")
     ),
 )]
+#[instrument(skip(service), ret, err(Debug))]
 async fn delete_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, SetId)>,
@@ -286,7 +287,8 @@ async fn delete_set<T>(
 where
     T: Repository + Debug,
 {
-    todo!()
+    service.sets.delete(topic_id, set_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[instrument(level=Level::DEBUG)]

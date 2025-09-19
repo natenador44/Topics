@@ -40,6 +40,8 @@ pub enum SetRepoError {
     Create,
     #[error("failed to get set")]
     Get,
+    #[error("failed to delete set")]
+    Delete,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -71,7 +73,7 @@ pub trait TopicRepository {
         &self,
         name: String,
         description: Option<String>,
-    ) -> impl Future<Output = AppResult<TopicId, TopicRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<Topic, TopicRepoError>> + Send;
 
     fn delete(
         &self,
@@ -103,4 +105,10 @@ pub trait SetRepository {
         topic_id: TopicId,
         set_id: SetId,
     ) -> impl Future<Output = AppResult<Option<Set>, SetRepoError>> + Send;
+    
+    fn delete(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> impl Future<Output = AppResult<(), SetRepoError>> + Send;
 }

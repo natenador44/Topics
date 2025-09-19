@@ -67,6 +67,8 @@ where
 
 #[derive(Debug, Serialize, ToSchema)]
 struct TopicResponse {
+    #[serde(skip)]
+    status_code: StatusCode,
     id: TopicId,
     name: String,
     description: Option<String>,
@@ -75,8 +77,20 @@ struct TopicResponse {
 }
 
 impl TopicResponse {
-    fn new(topic: Topic) -> Self {
+    fn ok(topic: Topic) -> Self {
         Self {
+            status_code: StatusCode::OK,
+            id: topic.id,
+            name: topic.name,
+            description: topic.description,
+            sets_url: format!("/api/v1/topics/{}/sets", topic.id),
+            identifiers_url: format!("/api/v1/topics/{}/identifiers", topic.id),
+        }
+    }
+
+    fn created(topic: Topic) -> Self {
+        Self {
+            status_code: StatusCode::CREATED,
             id: topic.id,
             name: topic.name,
             description: topic.description,
@@ -89,7 +103,7 @@ impl TopicResponse {
 impl IntoResponse for TopicResponse {
     fn into_response(self) -> Response {
         (
-            StatusCode::OK,
+            self.status_code,
             Json(json!({
                 "id": self.id,
                 "name": self.name,
@@ -109,7 +123,7 @@ impl IntoResponse for MultiTopicResponse {
         let responses = self
             .0
             .into_iter()
-            .map(TopicResponse::new)
+            .map(TopicResponse::ok)
             .collect::<Vec<_>>();
         (StatusCode::OK, Json(responses)).into_response()
     }
@@ -183,7 +197,7 @@ where
     let topic = service.topics.get(topic_id).await?;
 
     Ok(topic
-        .map(|t| TopicResponse::new(t).into_response())
+        .map(|t| TopicResponse::ok(t).into_response())
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
@@ -192,20 +206,20 @@ where
     post,
     path = TOPIC_CREATE_PATH,
     responses(
-        (status = CREATED, description = "A topic was successfully created", body = TopicId),
+        (status = CREATED, description = "A topic was successfully created", body = TopicResponse),
     ),
     request_body = TopicRequest
 )]
 #[instrument(skip_all, ret, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
-pub async fn create_topic<T>(
+async fn create_topic<T>(
     State(service): State<Service<T>>,
     Json(topic): Json<TopicRequest>,
-) -> Result<(StatusCode, Json<TopicId>), ServiceError<TopicServiceError>>
+) -> Result<TopicResponse, ServiceError<TopicServiceError>>
 where
     T: Repository + Debug,
 {
-    let new_topic_id = service.topics.create(topic.name, topic.description).await?;
-    Ok((StatusCode::CREATED, Json(new_topic_id)))
+    let new_topic = service.topics.create(topic.name, topic.description).await?;
+    Ok(TopicResponse::created(new_topic))
 }
 
 /// Delete the topic associated with the given id
