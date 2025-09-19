@@ -88,13 +88,17 @@ impl TopicResponse {
 
 impl IntoResponse for TopicResponse {
     fn into_response(self) -> Response {
-        (StatusCode::OK, Json(json!({
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "sets_url": self.sets_url,
-            "identifiers_url": self.identifiers_url,
-        }))).into_response()
+        (
+            StatusCode::OK,
+            Json(json!({
+                "id": self.id,
+                "name": self.name,
+                "description": self.description,
+                "sets_url": self.sets_url,
+                "identifiers_url": self.identifiers_url,
+            })),
+        )
+            .into_response()
     }
 }
 
@@ -102,7 +106,11 @@ impl IntoResponse for TopicResponse {
 struct MultiTopicResponse(Vec<Topic>);
 impl IntoResponse for MultiTopicResponse {
     fn into_response(self) -> Response {
-        let responses = self.0.into_iter().map(TopicResponse::new).collect::<Vec<_>>();
+        let responses = self
+            .0
+            .into_iter()
+            .map(TopicResponse::new)
+            .collect::<Vec<_>>();
         (StatusCode::OK, Json(responses)).into_response()
     }
 }

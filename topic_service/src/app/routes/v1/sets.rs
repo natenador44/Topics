@@ -67,20 +67,46 @@ where
         .route(REMOVE_ENTITY_PATH, delete(delete_entity_in_set))
 }
 
-#[derive(ToSchema)]
-struct CreateSetResponse {
-    set: Set,
+#[derive(Debug, ToSchema, Serialize)]
+struct SetResponse {
+    #[serde(skip)]
+    status_code: StatusCode,
+    id: SetId,
+    topic_id: TopicId,
+    name: String,
     entities_url: String,
 }
 
-impl IntoResponse for CreateSetResponse {
+impl SetResponse {
+    fn ok(set: Set) -> Self {
+        Self {
+            status_code: StatusCode::OK,
+            id: set.id,
+            topic_id: set.topic_id,
+            name: set.name,
+            entities_url: format!("/api/v1/topics/{}/sets/{}/entities", set.topic_id, set.id),
+        }
+    }
+
+    fn created(set: Set) -> Self {
+        Self {
+            status_code: StatusCode::CREATED,
+            id: set.id,
+            topic_id: set.topic_id,
+            name: set.name,
+            entities_url: format!("/api/v1/topics/{}/sets/{}/entities", set.topic_id, set.id),
+        }
+    }
+}
+
+impl IntoResponse for SetResponse {
     fn into_response(self) -> Response {
         (
-            StatusCode::CREATED,
+            self.status_code,
             Json(json!({
-                    "id": self.set.id,
-                    "topic_id": self.set.topic_id,
-                    "name": self.set.name,
+                    "id": self.id,
+                    "topic_id": self.topic_id,
+                    "name": self.name,
                     "entities_url": self.entities_url,
                 }
             )),
@@ -93,7 +119,7 @@ impl IntoResponse for CreateSetResponse {
     post,
     path = CREATE_SET_PATH,
     responses(
-        (status = CREATED, description = "A set was successfully created", body = CreateSetResponse),
+        (status = CREATED, description = "A set was successfully created", body = SetResponse),
         (status = NOT_FOUND, description = "The topic id does not exist"),
     ),
     params(
@@ -119,14 +145,7 @@ where
         .await?;
 
     match new_set {
-        Some(new_set) => Ok(CreateSetResponse {
-            entities_url: format!(
-                "/api/v1/topics/{}/sets/{}/entities",
-                new_set.topic_id, new_set.id
-            ),
-            set: new_set,
-        }
-        .into_response()),
+        Some(new_set) => Ok(SetResponse::created(new_set).into_response()),
         // TODO find a way to have ? automatically return a 404 response if this is true
         None => Ok(StatusCode::NOT_FOUND.into_response()),
     }
@@ -155,7 +174,7 @@ where
     let set = service.sets.get(topic_id, set_id).await?;
 
     Ok(set
-        .map(|s| Json(s).into_response())
+        .map(|s| SetResponse::ok(s).into_response())
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 

@@ -105,10 +105,11 @@ async fn create_set_name_is_not_optional() {
 }
 
 #[tokio::test]
-async fn create_set_name_json_type_is_string() {
+async fn create_set_name_json_type_is_non_null_string() {
     let topic_id = TopicId::new();
 
     let invalid_name_json = [
+        Value::Null,
         Value::Array(vec![]),
         Value::Object(Map::new()),
         Value::Number(Number::from(2)),
@@ -260,7 +261,8 @@ async fn get_set_success() {
     response.assert_json(&json!({
         "id": set_id,
         "topic_id": topic_id,
-        "name": TEST_SET_NAME
+        "name": TEST_SET_NAME,
+        "entities_url": format!("/api/v1/topics/{topic_id}/sets/{set_id}/entities"),
     }));
 }
 

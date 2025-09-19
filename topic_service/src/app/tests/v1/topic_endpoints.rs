@@ -209,13 +209,18 @@ async fn search_returns_array_of_topic_responses_when_ok() {
         .once()
         .return_once(return_scenario::search::non_empty(topics.clone()));
 
-    let expected_responses = topics.into_iter().map(|t| json!({
-        "id": t.id,
-        "name": t.name,
-        "description": t.description,
-        "sets_url": format!("/api/v1/topics/{}/sets", t.id),
-        "identifiers_url": format!("/api/v1/topics/{}/identifiers", t.id),
-    })).collect::<Vec<_>>();
+    let expected_responses = topics
+        .into_iter()
+        .map(|t| {
+            json!({
+                "id": t.id,
+                "name": t.name,
+                "description": t.description,
+                "sets_url": format!("/api/v1/topics/{}/sets", t.id),
+                "identifiers_url": format!("/api/v1/topics/{}/identifiers", t.id),
+            })
+        })
+        .collect::<Vec<_>>();
 
     let response = run_get_endpoint("/api/v1/topics", topic_repo).await;
 
@@ -257,7 +262,11 @@ async fn get_returns_not_found_if_no_topics_exist() {
 async fn get_success() {
     let request_id = TopicId::new();
 
-    let existing_topic = Topic::new(request_id, DEFAULT_NAME.to_owned(), Some(DEFAULT_DESC.to_owned()));
+    let existing_topic = Topic::new(
+        request_id,
+        DEFAULT_NAME.to_owned(),
+        Some(DEFAULT_DESC.to_owned()),
+    );
 
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
