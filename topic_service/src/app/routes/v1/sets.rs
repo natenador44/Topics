@@ -1,3 +1,5 @@
+use axum::extract::{FromRef, FromRequestParts};
+use axum::http::request::Parts;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -5,20 +7,19 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
+use error_stack::IntoReport;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
-use axum::extract::{FromRef, FromRequestParts};
-use axum::http::request::Parts;
-use error_stack::IntoReport;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::app::models::Set;
+use crate::error::TopicServiceError;
 use crate::{
     app::{
-        models::{Entity, EntityId, TopicId, SetId},
+        models::{Entity, EntityId, SetId, TopicId},
         pagination::Pagination,
         repository::Repository,
         services::Service,
@@ -26,7 +27,6 @@ use crate::{
     },
     error::{ServiceError, SetServiceError},
 };
-use crate::error::TopicServiceError;
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -128,9 +128,7 @@ where
         }
         .into_response()),
         // TODO find a way to have ? automatically return a 404 response if this is true
-        None => {
-            Ok(StatusCode::NOT_FOUND.into_response())
-        }
+        None => Ok(StatusCode::NOT_FOUND.into_response()),
     }
 }
 
@@ -150,12 +148,15 @@ where
 async fn get_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, SetId)>,
-) -> Result<Response, ServiceError<SetServiceError>> 
-    where T: Repository + Debug,
+) -> Result<Response, ServiceError<SetServiceError>>
+where
+    T: Repository + Debug,
 {
     let set = service.sets.get(topic_id, set_id).await?;
-    
-    Ok(set.map(|s| Json(s).into_response()).unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
+
+    Ok(set
+        .map(|s| Json(s).into_response())
+        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
 #[derive(Deserialize, ToSchema, Debug)]

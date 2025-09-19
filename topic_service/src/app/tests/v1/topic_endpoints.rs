@@ -200,6 +200,29 @@ async fn search_returns_ok_status_when_topics_are_found() {
     response.assert_status_ok();
 }
 
+#[tokio::test]
+async fn search_returns_array_of_topic_responses_when_ok() {
+    let mut topic_repo = MockTopicRepository::new();
+    let topics = create_topic_list(10);
+    topic_repo
+        .expect_search()
+        .once()
+        .return_once(return_scenario::search::non_empty(topics.clone()));
+
+    let expected_responses = topics.into_iter().map(|t| json!({
+        "id": t.id,
+        "name": t.name,
+        "description": t.description,
+        "sets_url": format!("/api/v1/topics/{}/sets", t.id),
+        "identifiers_url": format!("/api/v1/topics/{}/identifiers", t.id),
+    })).collect::<Vec<_>>();
+
+    let response = run_get_endpoint("/api/v1/topics", topic_repo).await;
+
+    response.assert_status_ok();
+    response.assert_json(&expected_responses);
+}
+
 // the service itself currently can't return an error. may need to ensure that it's dependencies are
 // all traits so they can all be mocked, and the service doesn't return any errors on its own
 // unless it can be influenced by one of its dependencies.
@@ -231,10 +254,10 @@ async fn get_returns_not_found_if_no_topics_exist() {
 }
 
 #[tokio::test]
-async fn get_returns_json_topic_and_ok_status_if_topic_found() {
-    let existing_topic = Topic::new_random_id(DEFAULT_NAME, DEFAULT_DESC);
-
+async fn get_success() {
     let request_id = TopicId::new();
+
+    let existing_topic = Topic::new(request_id, DEFAULT_NAME.to_owned(), Some(DEFAULT_DESC.to_owned()));
 
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -246,7 +269,13 @@ async fn get_returns_json_topic_and_ok_status_if_topic_found() {
     let response = run_get_endpoint(&format!("/api/v1/topics/{request_id}"), topic_repo).await;
 
     response.assert_status_ok();
-    response.assert_json(&existing_topic);
+    response.assert_json(&json!({
+        "id": request_id,
+        "name": DEFAULT_NAME,
+        "description": DEFAULT_DESC,
+        "sets_url": format!("/api/v1/topics/{request_id}/sets"),
+        "identifiers_url": format!("/api/v1/topics/{request_id}/identifiers"),
+    }));
 }
 
 #[tokio::test]

@@ -17,7 +17,7 @@ use crate::app::{
     repository::TopicRepoError,
 };
 use crate::app::{
-    models::{TopicId, SetId},
+    models::{SetId, TopicId},
     repository::SetRepoError,
 };
 use crate::error::AppResult;
@@ -314,7 +314,7 @@ where
 #[instrument(fields(data_type = std::any::type_name::<T>()))]
 fn load_data<T>(path: &Path) -> AppResult<T, LoadError>
 where
-        for<'a> T: Deserialize<'a>,
+    for<'a> T: Deserialize<'a>,
 {
     debug!("loading data...");
 
@@ -379,7 +379,7 @@ impl SetRepository for FileSetRepo {
                 .change_context(SetRepoError::Create)
                 .attach_with(|| topic_dir.display().to_string())?;
         }
-        
+
         let set_id = SetId::new();
 
         let mut entity_ids = Vec::with_capacity(initial_entity_payloads.len());
@@ -417,27 +417,23 @@ impl SetRepository for FileSetRepo {
 
         Ok(set)
     }
-    
+
     #[instrument(skip_all, name = "repo#get")]
-    async fn get(
-        &self,
-        topic_id: TopicId,
-        set_id: SetId
-    ) -> AppResult<Option<Set>, SetRepoError> {
+    async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Option<Set>, SetRepoError> {
         let set_file_path = generate_set_file_path(topic_id, set_id);
-        
+
         if !set_file_path.exists() {
             return Ok(None);
         }
-        
+
         #[derive(Deserialize)]
         struct JustSetName {
             name: String,
         }
-        
-        let JustSetName { name } = load_data::<JustSetName>(&set_file_path)
-            .change_context(SetRepoError::Get)?;
-        
+
+        let JustSetName { name } =
+            load_data::<JustSetName>(&set_file_path).change_context(SetRepoError::Get)?;
+
         Ok(Some(Set {
             id: set_id,
             topic_id,
@@ -447,5 +443,7 @@ impl SetRepository for FileSetRepo {
 }
 
 fn generate_set_file_path(topic_id: TopicId, set_id: SetId) -> PathBuf {
-    SETS_DIR.join(topic_id.to_string()).join(format!("{}.json", set_id.to_string()))
+    SETS_DIR
+        .join(topic_id.to_string())
+        .join(format!("{}.json", set_id.to_string()))
 }

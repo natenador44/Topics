@@ -8,7 +8,8 @@ use axum::{
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tracing::{info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
@@ -64,13 +65,55 @@ where
         .route(TOPIC_PATCH_PATH, patch(patch_topic))
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+struct TopicResponse {
+    id: TopicId,
+    name: String,
+    description: Option<String>,
+    sets_url: String,
+    identifiers_url: String,
+}
+
+impl TopicResponse {
+    fn new(topic: Topic) -> Self {
+        Self {
+            id: topic.id,
+            name: topic.name,
+            description: topic.description,
+            sets_url: format!("/api/v1/topics/{}/sets", topic.id),
+            identifiers_url: format!("/api/v1/topics/{}/identifiers", topic.id),
+        }
+    }
+}
+
+impl IntoResponse for TopicResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(json!({
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "sets_url": self.sets_url,
+            "identifiers_url": self.identifiers_url,
+        }))).into_response()
+    }
+}
+
+#[derive(Debug, ToSchema)]
+struct MultiTopicResponse(Vec<Topic>);
+impl IntoResponse for MultiTopicResponse {
+    fn into_response(self) -> Response {
+        let responses = self.0.into_iter().map(TopicResponse::new).collect::<Vec<_>>();
+        (StatusCode::OK, Json(responses)).into_response()
+    }
+}
+
 /// Query and filter for topics. Can specify pagination (page and page_size) to limit results returned.
 /// Can also specify `SearchCriteria` to further reduce results based on name, description, or more.
 #[utoipa::path(
     get,
     path = TOPIC_SEARCH_PATH,
     responses(
-        (status = OK, description = "At least one topic was found given the search criteria", body = Vec<Topic>),
+        (status = OK, description = "At least one topic was found given the search criteria", body = MultiTopicResponse),
         (status = NO_CONTENT, description = "No topics were found for the given search criteria"),
     ),
     params(
@@ -104,7 +147,7 @@ where
     if topics.is_empty() {
         Ok(StatusCode::NO_CONTENT.into_response())
     } else {
-        Ok(Json(topics).into_response())
+        Ok(MultiTopicResponse(topics).into_response())
     }
 }
 
@@ -132,7 +175,7 @@ where
     let topic = service.topics.get(topic_id).await?;
 
     Ok(topic
-        .map(|t| Json(t).into_response())
+        .map(|t| TopicResponse::new(t).into_response())
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 

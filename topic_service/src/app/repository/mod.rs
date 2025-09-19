@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::error::AppResult;
 
-use crate::app::models::{Entity, EntityId, Topic, TopicId, Set, SetId};
+use crate::app::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
 
 pub mod file;
 

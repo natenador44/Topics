@@ -1,7 +1,7 @@
 use crate::app::models::{EntityId, Set};
 use crate::app::repository::{Repository, SetRepository, TopicRepoError, TopicRepository};
 use crate::{
-    app::models::{Entity, TopicId, SetId},
+    app::models::{Entity, SetId, TopicId},
     error::{AppResult, SetServiceError},
 };
 use error_stack::{IntoReport, ResultExt};
@@ -61,18 +61,23 @@ where
         Ok(Some(new_set))
     }
 
-
     #[instrument(skip_all, name = "service#get")]
-    pub async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Option<Set>, SetServiceError> {
-        let topic_exists = self.topic_exists(topic_id)
+    pub async fn get(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> AppResult<Option<Set>, SetServiceError> {
+        let topic_exists = self
+            .topic_exists(topic_id)
             .await
             .change_context(SetServiceError)?;
-        
+
         if !topic_exists {
             return Ok(None);
         }
-        
-        self.repo.sets()
+
+        self.repo
+            .sets()
             .get(topic_id, set_id)
             .await
             .change_context(SetServiceError)
