@@ -1,13 +1,10 @@
-use axum::extract::{FromRef, FromRequestParts};
-use axum::http::request::Parts;
 use axum::{
     Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
 };
-use error_stack::IntoReport;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
@@ -17,7 +14,6 @@ use utoipa_axum::router::OpenApiRouter;
 
 use crate::app::models::Set;
 use crate::app::services::ResourceOutcome;
-use crate::error::TopicServiceError;
 use crate::{
     app::{
         models::{Entity, EntityId, SetId, TopicId},
@@ -48,6 +44,7 @@ pub struct SetRequest {
 
 const CREATE_SET_PATH: &str = "/";
 const GET_SET_PATH: &str = "/{set_id}";
+const SEARCH_SETS_PATH: &str = "/";
 const ADD_ENTITY_PATH: &str = "/{set_id}/entities";
 const SEARCH_ENTITIES_PATH: &str = "/{set_id}/entities";
 const GET_ENTITY_PATH: &str = "/{set_id}/entities/{entity_id}";
@@ -61,9 +58,10 @@ where
     OpenApiRouter::new()
         .route(CREATE_SET_PATH, post(create_set))
         .route(GET_SET_PATH, get(get_set))
+        .route(SEARCH_SETS_PATH, get(search_sets))
         .route(SEARCH_ENTITIES_PATH, get(search_entities_in_set))
         .route(GET_ENTITY_PATH, get(get_entity_in_set))
-        .route(ADD_ENTITY_PATH, put(add_entity_to_set))
+        .route(ADD_ENTITY_PATH, patch(add_entity_to_set))
         .route(DELETE_SET_PATH, delete(delete_set))
         .route(REMOVE_ENTITY_PATH, delete(delete_entity_in_set))
 }
@@ -180,6 +178,36 @@ where
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
+/// Search through all Sets under a given Topic.
+/// Sets can be searched through by name, or by certain identifiers assigned to their entities.
+/// This differs from the entity search because this searches through all Sets instead of just one.
+/// This also returns a list of Sets that match the search criteria, where the entity search returns
+/// a list of Entities.
+#[utoipa::path(
+    get,
+    path = SEARCH_SETS_PATH,
+    responses(
+        (status = OK, description = "Sets were found", body = Vec<Set>),
+        (status = NO_CONTENT, description = "No sets were found", body = Vec<Set>),
+        (status = NOT_FOUND, description = "The topic id does not exist")
+    ),
+    params(
+        ("topic_id" = TopicId, Path, description = "Sets under this topic will be searched"),
+    ),
+)]
+// #[axum::debug_handler]
+#[instrument(skip(service), ret, err(Debug))]
+async fn search_sets<T>(
+    State(service): State<Service<T>>,
+    Path(topic_id): Path<TopicId>,
+    // TODO search by name, identifiers, etc
+) -> Result<Response, ServiceError<SetServiceError>>
+where
+    T: Repository + Debug,
+{
+    todo!()
+}
+
 #[derive(Deserialize, ToSchema, Debug)]
 enum EntitySearch {
     /// Search through all entities, through all keys and values, for a fuzzy match to the given String
@@ -195,6 +223,9 @@ struct EntityResponse {
     topic_url: String,
 }
 
+/// Search through the entities of the given Set under the given Topic.
+/// Entities can be searched by name, by identifiers assigned to them,
+/// or by a fuzzy search through the entire entity.
 #[utoipa::path(
     get,
     path = SEARCH_ENTITIES_PATH,
@@ -246,7 +277,7 @@ where
 
 #[instrument(level=Level::DEBUG)]
 #[utoipa::path(
-    put,
+    patch,
     path = ADD_ENTITY_PATH,
     responses(
         (status = CREATED, description = "The entity was created and added to the set. Returns the ID of the new entity", body = EntityId),
