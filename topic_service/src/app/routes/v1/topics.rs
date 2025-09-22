@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::time::Duration;
 
 use axum::routing::patch;
 use axum::{
@@ -9,11 +10,12 @@ use axum::{
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use tokio_stream::StreamExt;
 use tracing::{info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
+use crate::app::routes::response::StreamingResponse;
 use crate::app::services::ResourceOutcome;
 use crate::{
     app::{
@@ -103,30 +105,7 @@ impl TopicResponse {
 
 impl IntoResponse for TopicResponse {
     fn into_response(self) -> Response {
-        (
-            self.status_code,
-            Json(json!({
-                "id": self.id,
-                "name": self.name,
-                "description": self.description,
-                "sets_url": self.sets_url,
-                "identifiers_url": self.identifiers_url,
-            })),
-        )
-            .into_response()
-    }
-}
-
-#[derive(Debug, ToSchema)]
-struct MultiTopicResponse(Vec<Topic>);
-impl IntoResponse for MultiTopicResponse {
-    fn into_response(self) -> Response {
-        let responses = self
-            .0
-            .into_iter()
-            .map(TopicResponse::ok)
-            .collect::<Vec<_>>();
-        (StatusCode::OK, Json(responses)).into_response()
+        (self.status_code, Json(self)).into_response()
     }
 }
 
@@ -136,7 +115,7 @@ impl IntoResponse for MultiTopicResponse {
     get,
     path = TOPIC_SEARCH_PATH,
     responses(
-        (status = OK, description = "At least one topic was found given the search criteria", body = MultiTopicResponse),
+        (status = OK, description = "At least one topic was found given the search criteria", body = Vec<TopicResponse>),
         (status = NO_CONTENT, description = "No topics were found for the given search criteria"),
     ),
     params(
@@ -170,7 +149,7 @@ where
     if topics.is_empty() {
         Ok(StatusCode::NO_CONTENT.into_response())
     } else {
-        Ok(MultiTopicResponse(topics).into_response())
+        Ok(StreamingResponse::new(topics.into_iter().map(TopicResponse::ok)).into_response())
     }
 }
 

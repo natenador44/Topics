@@ -5,6 +5,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::app::{repository::Repository, state::AppState};
 
+mod response;
 mod v1;
 
 pub fn build<T>(app_state: AppState<T>) -> Router
