@@ -135,6 +135,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-streams"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "144504cefd7a118724978cd549651c93e8c993978715634aff6e14c2e41f69c5"
+dependencies = [
+ "axum",
+ "bytes",
+ "futures",
+ "http",
+ "http-body",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+]
+
+[[package]]
 name = "axum-test"
 version = "18.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1619,10 +1635,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-stream"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eca58d7bba4a75707817a2c44174253f9236b2d5fbd055602e9d5c07c139a047"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "topic_service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "axum-streams",
  "axum-test",
  "const_format",
  "error-stack",
@@ -1632,6 +1660,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "utoipa",
