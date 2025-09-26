@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
@@ -8,12 +8,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
+use axum_extra::extract::Query;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
+use itertools::Itertools;
 
-use crate::app::models::Set;
-use crate::app::services::ResourceOutcome;
+use crate::app::models::{IdentifierId, Set};
+use crate::app::routes::response::StreamingResponse;
+use crate::app::services::{ResourceOutcome, SetSearchFilter};
 use crate::{
     app::{
         models::{Entity, EntityId, SetId, TopicId},
@@ -24,6 +27,7 @@ use crate::{
     },
     error::{ServiceError, SetServiceError},
 };
+use crate::app::search_filter::{SearchFilter};
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -178,6 +182,16 @@ where
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
+#[derive(Debug, Deserialize)]
+struct SetSearch {
+    /// Find all sets whose name fuzzy matches this name.
+    name: Option<String>,
+    /// Find all sets whose entities contain this text (fuzzy search)
+    entity_text: Option<String>,
+    /// Find all sets whose entities have any of these identifiers
+    identifiers: Option<Vec<IdentifierId>>,
+}
+
 /// Search through all Sets under a given Topic.
 /// Sets can be searched through by name, or by certain identifiers assigned to their entities.
 /// This differs from the entity search because this searches through all Sets instead of just one.
@@ -188,7 +202,7 @@ where
     path = SEARCH_SETS_PATH,
     responses(
         (status = OK, description = "Sets were found", body = Vec<Set>),
-        (status = NO_CONTENT, description = "No sets were found", body = Vec<Set>),
+        (status = NO_CONTENT, description = "No sets were found"),
         (status = NOT_FOUND, description = "The topic id does not exist")
     ),
     params(
@@ -196,23 +210,53 @@ where
     ),
 )]
 // #[axum::debug_handler]
-#[instrument(skip(service), ret, err(Debug))]
+#[instrument(skip(service, name, entity_text, identifiers, pagination), ret, err(Debug), fields(
+    req.page = pagination.page,
+    req.page_size = pagination.page_size,
+    req.filter.name = name,
+    req.filter.entity_text = entity_text,
+    req.filter.identifiers = identifiers.as_ref().map(|ids| ids.into_iter().map(|id| id.to_string()).join(",")),
+))]
 async fn search_sets<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
-    // TODO search by name, identifiers, etc
+    Query(SetSearch {
+        name,
+        entity_text,
+        identifiers,
+    }): Query<SetSearch>,
+    Query(pagination): Query<Pagination>,
 ) -> Result<Response, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
 {
-    todo!()
-}
-
-#[derive(Deserialize, ToSchema, Debug)]
-enum EntitySearch {
-    /// Search through all entities, through all keys and values, for a fuzzy match to the given String
-    FuzzySearch(String),
-    // something like a list of identifiers
+    let mut search_criteria = SetSearchFilter::criteria(pagination);
+    
+    if let Some(name) = name {
+        search_criteria.add(SetSearchFilter::Name(name));
+    }
+    
+    if let Some(entity_text) = entity_text {
+        search_criteria.add(SetSearchFilter::EntityText(entity_text));
+    }
+    
+    if let Some(identifiers) = identifiers {
+        search_criteria.add(SetSearchFilter::Identifiers(identifiers));
+    }
+    
+    let Some(sets) = service
+        .sets
+        .search(topic_id, search_criteria)
+        .await?
+    else {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    };
+    
+    if sets.is_empty() {
+        Ok(StatusCode::NO_CONTENT.into_response())
+    } else {
+        Ok(StreamingResponse::new(sets.into_iter().map(SetResponse::ok)).into_response())
+    }
 }
 
 #[derive(Serialize, ToSchema, Debug)]

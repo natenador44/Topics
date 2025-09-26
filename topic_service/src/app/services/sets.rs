@@ -1,18 +1,47 @@
-use crate::app::models::{EntityId, Set};
+use crate::app::models::{IdentifierId, Set};
+use crate::app::pagination::Pagination;
 use crate::app::repository::{Repository, SetRepository, TopicRepoError, TopicRepository};
 use crate::app::services::ResourceOutcome;
 use crate::{
-    app::models::{Entity, SetId, TopicId},
+    app::models::{SetId, TopicId},
     error::{AppResult, SetServiceError},
 };
-use error_stack::{IntoReport, ResultExt};
+use error_stack::ResultExt;
 use serde_json::Value;
 use tracing::{debug, info, instrument};
+use crate::app::search_filter::{SearchCriteria, SearchFilter, Tag};
 
 #[derive(Debug, Clone)]
 pub struct SetService<T> {
     repo: T,
 }
+
+const DEFAULT_SET_PAGE_SIZE: usize = 10;
+
+pub type SetSearchCriteria = SearchCriteria<SetSearchFilter, 3>;
+
+pub enum SetSearchFilter {
+    Name(String),
+    EntityText(String),
+    Identifiers(Vec<IdentifierId>),
+}
+
+impl SearchFilter for SetSearchFilter {
+    type Criteria = SetSearchCriteria;
+
+    fn tag(&self) -> Tag {
+        match self {
+            SetSearchFilter::Name(_) => Tag::One,
+            SetSearchFilter::EntityText(_) => Tag::Two,
+            SetSearchFilter::Identifiers(_) => Tag::Four,
+        }
+    }
+
+    fn criteria(pagination: Pagination) -> Self::Criteria {
+        SearchCriteria::new(pagination, DEFAULT_SET_PAGE_SIZE)
+    }
+}
+
 
 // TODO have all `delete` operations return a not-found-like response if any of the
 // requested resources do not exist
@@ -23,6 +52,15 @@ where
 {
     pub fn new(repo: T) -> Self {
         Self { repo }
+    }
+
+    #[instrument(skip_all, name = "service#search")]
+    pub async fn search(
+        &self,
+        topic_id: TopicId,
+        search_criteria: SetSearchCriteria,
+    ) -> AppResult<Option<Vec<Set>>, SetServiceError> {
+        todo!()
     }
 
     /// Create a new `Set` under the given `Topic` (`topic_id`).

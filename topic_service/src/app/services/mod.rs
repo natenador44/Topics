@@ -1,7 +1,7 @@
 mod sets;
 mod topics;
 
-pub use sets::SetService;
+pub use sets::{SetService, SetSearchFilter};
 pub use topics::TopicService;
 
 #[cfg(test)]

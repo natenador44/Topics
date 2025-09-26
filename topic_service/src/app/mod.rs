@@ -12,6 +12,8 @@ mod routes;
 mod services;
 mod state;
 
+mod search_filter;
+
 #[cfg(test)]
 mod tests;
 

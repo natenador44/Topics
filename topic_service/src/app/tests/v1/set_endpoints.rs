@@ -15,6 +15,7 @@ const TEST_SET_NAME: &str = "test";
 // TODO test rejection of all endpoints if topic id or set id is not a UUID
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_success() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -54,6 +55,7 @@ async fn create_set_success() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_entities_are_optional() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -86,6 +88,7 @@ async fn create_set_entities_are_optional() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_name_is_not_optional() {
     let topic_id = TopicId::new();
 
@@ -107,6 +110,7 @@ async fn create_set_name_is_not_optional() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_name_json_type_is_non_null_string() {
     let topic_id = TopicId::new();
 
@@ -139,6 +143,7 @@ async fn create_set_name_json_type_is_non_null_string() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_returns_not_found_if_topic_does_not_exist() {
     let topic_id = TopicId::new();
     let set_repo = MockSetRepository::new();
@@ -160,6 +165,7 @@ async fn create_set_returns_not_found_if_topic_does_not_exist() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_returns_internal_server_error_if_topic_repo_returns_error() {
     let topic_id = TopicId::new();
     let set_repo = MockSetRepository::new();
@@ -181,6 +187,7 @@ async fn create_set_returns_internal_server_error_if_topic_repo_returns_error() 
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_returns_internal_server_error_if_set_repo_returns_error() {
     let topic_id = TopicId::new();
     let mut set_repo = MockSetRepository::new();
@@ -204,6 +211,7 @@ async fn create_set_returns_internal_server_error_if_set_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_set_entities_json_type_is_array() {
     let topic_id = TopicId::new();
 
@@ -236,6 +244,7 @@ async fn create_set_entities_json_type_is_array() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_set_success() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -269,6 +278,7 @@ async fn get_set_success() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_set_returns_not_found_if_topic_does_not_exist() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -292,6 +302,7 @@ async fn get_set_returns_not_found_if_topic_does_not_exist() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_set_returns_not_found_if_set_does_not_exist() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -319,6 +330,7 @@ async fn get_set_returns_not_found_if_set_does_not_exist() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_set_returns_internal_server_error_if_topic_repo_returns_error() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -342,6 +354,7 @@ async fn get_set_returns_internal_server_error_if_topic_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_set_returns_internal_server_error_if_set_repo_returns_error() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -368,6 +381,7 @@ async fn get_set_returns_internal_server_error_if_set_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_success() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -393,6 +407,7 @@ async fn delete_success() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_bad_request_if_topic_id_not_uuid() {
     let set_id = SetId::new();
 
@@ -411,6 +426,7 @@ async fn delete_bad_request_if_topic_id_not_uuid() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_bad_request_if_set_id_not_uuid() {
     let topic_id = TopicId::new();
 
@@ -429,6 +445,7 @@ async fn delete_bad_request_if_set_id_not_uuid() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_error_if_repo_returns_error() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -454,6 +471,7 @@ async fn delete_returns_error_if_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_not_found_if_topic_does_not_exist() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -477,6 +495,7 @@ async fn delete_returns_not_found_if_topic_does_not_exist() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_not_found_if_set_does_not_exist() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();

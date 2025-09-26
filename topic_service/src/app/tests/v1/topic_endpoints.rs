@@ -20,6 +20,7 @@ const DEFAULT_NAME: &str = "topic1";
 const DEFAULT_DESC: &str = "description1";
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_no_created_topics_returns_no_content() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -33,6 +34,7 @@ async fn search_no_created_topics_returns_no_content() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_default_pagination() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -49,6 +51,7 @@ async fn search_default_pagination() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn invalid_page_param_returns_bad_request() {
     let topic_repo = MockTopicRepository::new();
 
@@ -58,6 +61,7 @@ async fn invalid_page_param_returns_bad_request() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn invalid_page_size_param_returns_bad_request() {
     let topic_repo = MockTopicRepository::new();
 
@@ -67,6 +71,7 @@ async fn invalid_page_size_param_returns_bad_request() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn unknown_params_are_ignored() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -85,6 +90,7 @@ async fn unknown_params_are_ignored() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_page_param_is_taken_from_uri_query() {
     let page = 15;
 
@@ -103,6 +109,7 @@ async fn search_page_param_is_taken_from_uri_query() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_page_size_param_is_taken_from_uri_query() {
     let page_size = 150;
 
@@ -121,6 +128,7 @@ async fn search_page_size_param_is_taken_from_uri_query() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_name_param_results_in_topic_filter() {
     let name = String::from("topic1");
 
@@ -139,6 +147,7 @@ async fn search_name_param_results_in_topic_filter() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_description_param_results_in_topic_filter() {
     let description = String::from("desc1");
 
@@ -161,6 +170,7 @@ async fn search_description_param_results_in_topic_filter() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_name_and_description_param_results_in_topic_filters() {
     let name = String::from("name1");
     let description = String::from("desc1");
@@ -188,6 +198,7 @@ async fn search_name_and_description_param_results_in_topic_filters() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_returns_ok_status_when_topics_are_found() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -201,6 +212,7 @@ async fn search_returns_ok_status_when_topics_are_found() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_returns_array_of_topic_responses_when_ok() {
     let mut topic_repo = MockTopicRepository::new();
     let topics = create_topic_list(10);
@@ -232,6 +244,7 @@ async fn search_returns_array_of_topic_responses_when_ok() {
 // all traits so they can all be mocked, and the service doesn't return any errors on its own
 // unless it can be influenced by one of its dependencies.
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn search_returns_internal_server_error_if_repo_returns_error() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -245,6 +258,7 @@ async fn search_returns_internal_server_error_if_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_returns_not_found_if_no_topics_exist() {
     let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
@@ -259,6 +273,7 @@ async fn get_returns_not_found_if_no_topics_exist() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_success() {
     let request_id = TopicId::new();
 
@@ -288,6 +303,7 @@ async fn get_success() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_returns_internal_server_error_if_repo_error_occurs() {
     let request_id = TopicId::new();
 
@@ -304,6 +320,7 @@ async fn get_returns_internal_server_error_if_repo_error_occurs() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn get_returns_bad_request_if_id_is_not_uuid() {
     let request_id = "bad_id";
 
@@ -315,6 +332,7 @@ async fn get_returns_bad_request_if_id_is_not_uuid() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_success() {
     let topic_id = TopicId::new();
 
@@ -355,6 +373,7 @@ async fn create_success() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_returns_internal_server_error_if_repo_returns_error() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -380,6 +399,7 @@ async fn create_returns_internal_server_error_if_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_name_json_type_is_string() {
     let invalid_name_json = [
         Value::Array(vec![]),
@@ -407,6 +427,7 @@ async fn create_name_json_type_is_string() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_description_json_type_is_string() {
     let invalid_name_json = [
         Value::Array(vec![]),
@@ -435,6 +456,7 @@ async fn create_description_json_type_is_string() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_name_is_not_optional() {
     let topic_repo = MockTopicRepository::new();
 
@@ -451,6 +473,7 @@ async fn create_name_is_not_optional() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn create_description_is_optional() {
     let mut topic_repo = MockTopicRepository::new();
     topic_repo
@@ -475,6 +498,7 @@ async fn create_description_is_optional() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_no_content_if_no_error() {
     let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
@@ -489,6 +513,7 @@ async fn delete_returns_no_content_if_no_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_not_found_if_topic_does_not_exist() {
     let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
@@ -503,6 +528,7 @@ async fn delete_returns_not_found_if_topic_does_not_exist() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_bad_request_if_id_is_invalid() {
     let request_id = "bad_id";
 
@@ -514,6 +540,7 @@ async fn delete_returns_bad_request_if_id_is_invalid() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn delete_returns_internal_server_error_if_repo_returns_error() {
     let id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
@@ -528,6 +555,7 @@ async fn delete_returns_internal_server_error_if_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn update_returns_ok_and_updated_topic_if_no_error() {
     let new_name = String::from("different name");
     let new_desc = String::from("different description");
@@ -555,6 +583,7 @@ async fn update_returns_ok_and_updated_topic_if_no_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn update_returns_bad_request_if_id_is_invalid() {
     let request_id = "bad_id";
 
@@ -574,6 +603,7 @@ async fn update_returns_bad_request_if_id_is_invalid() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn update_returns_internal_server_error_if_repo_returns_error() {
     let request_id = TopicId::new();
     let mut topic_repo = MockTopicRepository::new();
@@ -595,6 +625,7 @@ async fn update_returns_internal_server_error_if_repo_returns_error() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn update_returns_not_found_if_topic_id_does_not_exist() {
     let id = TopicId::new();
 
