@@ -1,6 +1,6 @@
-use std::mem::MaybeUninit;
-use const_format::formatcp;
 use crate::app::pagination::Pagination;
+use const_format::formatcp;
+use std::mem::MaybeUninit;
 
 type MAX_FILTER_COUNT_TYPE = u8;
 const MAX: u8 = u8::MAX;
@@ -49,15 +49,19 @@ pub struct SearchCriteria<T, const N: usize> {
 
 impl<T, const N: usize> SearchCriteria<T, N> {
     pub fn new(pagination: Pagination, default_page_size: usize) -> Self {
-        const { assert!(N <= MAX_FILTER_COUNT_TYPE::MAX as usize, "{}", formatcp!("SearchCriteria only supports sizes up to {}", MAX)) };
+        const {
+            assert!(
+                N <= MAX_FILTER_COUNT_TYPE::MAX as usize,
+                "{}",
+                formatcp!("SearchCriteria only supports sizes up to {}", MAX)
+            )
+        };
         Self {
             inner: Box::new(SearchCriteriaInner {
-                filters: [ const { MaybeUninit::uninit() }; N],
-                applied_count: 0,
-                applied: Tag::NONE,
+                filters: None,
                 pagination,
                 default_page_size,
-            })
+            }),
         }
     }
 
@@ -66,40 +70,65 @@ impl<T, const N: usize> SearchCriteria<T, N> {
     }
 
     pub fn page_size(&self) -> usize {
-        self.inner.pagination.page_size.unwrap_or(self.inner.default_page_size)
+        self.inner
+            .pagination
+            .page_size
+            .unwrap_or(self.inner.default_page_size)
     }
 
-    pub fn filters(&self) -> &[T] {
-        unsafe {
-            std::mem::transmute(&self.inner.filters[..self.inner.applied_count as usize])
-        }
+    pub fn filters(&self) -> Option<&[T]> {
+        self.inner
+            .filters
+            .as_ref()
+            .map(|f| unsafe { std::mem::transmute(&f.filters[..f.applied_count as usize]) })
     }
 }
 
+struct SearchCriteriaInner<T, const N: usize> {
+    filters: Option<SearchCriteriaFilters<T, N>>,
+    pagination: Pagination,
+    default_page_size: usize,
+}
+
 impl<T, const N: usize> SearchCriteria<T, N>
-where T: SearchFilter,
+where
+    T: SearchFilter,
 {
     pub fn add(&mut self, filter: T) -> &mut Self {
+        let filters = self
+            .inner
+            .filters
+            .get_or_insert_with(SearchCriteriaFilters::new);
+
         let tag = filter.tag() as MAX_FILTER_COUNT_TYPE;
-        if tag & self.inner.applied == 0 {
-            self.inner.applied |= tag;
-            self.inner.filters[self.inner.applied_count as usize].write(filter);
-            self.inner.applied_count += 1;
+
+        if tag & filters.applied == 0 {
+            filters.applied |= tag;
+            filters.filters[filters.applied_count as usize].write(filter);
+            filters.applied_count += 1;
         }
 
         self
     }
 }
 
-struct SearchCriteriaInner<T, const N: usize> {
+struct SearchCriteriaFilters<T, const N: usize> {
     filters: [MaybeUninit<T>; N],
     applied_count: MAX_FILTER_COUNT_TYPE,
     applied: MAX_FILTER_COUNT_TYPE,
-    pagination: Pagination,
-    default_page_size: usize,
 }
 
-impl<T, const N: usize> Drop for SearchCriteriaInner<T, N> {
+impl<T, const N: usize> SearchCriteriaFilters<T, N> {
+    fn new() -> Self {
+        Self {
+            filters: [const { MaybeUninit::uninit() }; N],
+            applied_count: 0,
+            applied: Tag::NONE,
+        }
+    }
+}
+
+impl<T, const N: usize> Drop for SearchCriteriaFilters<T, N> {
     fn drop(&mut self) {
         for i in 0..self.applied_count {
             // SAFETY we've kept track of the number of filters applied, stored from left to right
@@ -111,22 +140,24 @@ impl<T, const N: usize> Drop for SearchCriteriaInner<T, N> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
     use super::*;
+    use std::collections::HashSet;
 
     #[derive(Copy, Clone, PartialEq, Debug, Eq)]
-    enum TestFilter {
-        Test1, Test2, Test3
+    enum TestSearch {
+        Test1,
+        Test2,
+        Test3,
     }
 
-    impl SearchFilter for TestFilter {
+    impl SearchFilter for TestSearch {
         type Criteria = SearchCriteria<Self, 3>;
 
         fn tag(&self) -> Tag {
             match self {
-                TestFilter::Test1 => Tag::One,
-                TestFilter::Test2 => Tag::Two,
-                TestFilter::Test3 => Tag::Four,
+                TestSearch::Test1 => Tag::One,
+                TestSearch::Test2 => Tag::Two,
+                TestSearch::Test3 => Tag::Four,
             }
         }
 
@@ -137,32 +168,49 @@ mod tests {
 
     #[test]
     fn each_filter_can_only_be_applied_once() {
-        let mut criteria = TestFilter::criteria(Pagination { page: 1, page_size: None });
+        let mut criteria = TestSearch::criteria(Pagination {
+            page: 1,
+            page_size: None,
+        });
         for _ in 0..10 {
-            criteria.add(TestFilter::Test1);
+            criteria.add(TestSearch::Test1);
         }
 
         for _ in 0..10 {
-            criteria.add(TestFilter::Test2);
+            criteria.add(TestSearch::Test2);
         }
 
         for _ in 0..10 {
-            criteria.add(TestFilter::Test3);
+            criteria.add(TestSearch::Test3);
         }
 
-        assert_eq!(3, criteria.filters().len());
-        assert_eq!(TestFilter::Test1, criteria.filters()[0]);
-        assert_eq!(TestFilter::Test2, criteria.filters()[1]);
-        assert_eq!(TestFilter::Test3, criteria.filters()[2]);
+        assert_eq!(3, criteria.filters().unwrap().len());
+        assert_eq!(TestSearch::Test1, criteria.filters().unwrap()[0]);
+        assert_eq!(TestSearch::Test2, criteria.filters().unwrap()[1]);
+        assert_eq!(TestSearch::Test3, criteria.filters().unwrap()[2]);
     }
 
     #[test]
     fn search_criteria_size_no_larger_than_hash_set() {
-        assert!(size_of::<SearchCriteria<TestFilter, 3>>() <= size_of::<HashSet<TestFilter>>());
+        let hash_set_size = size_of::<HashSet<TestSearch>>();
+        let criteria_size = size_of::<SearchCriteria<TestSearch, 3>>();
+        assert!(
+            criteria_size <= hash_set_size,
+            "{} <= {} failed",
+            criteria_size,
+            hash_set_size
+        );
     }
 
     #[test]
     fn search_criteria_size_no_larger_than_vec() {
-        assert!(size_of::<SearchCriteria<TestFilter, 3>>() <= size_of::<Vec<TestFilter>>());
+        let vec_size = size_of::<Vec<TestSearch>>();
+        let criteria_size = size_of::<SearchCriteria<TestSearch, 3>>();
+        assert!(
+            criteria_size <= vec_size,
+            "{} <= {} failed",
+            criteria_size,
+            vec_size
+        );
     }
 }

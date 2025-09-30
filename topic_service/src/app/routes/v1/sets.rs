@@ -5,18 +5,21 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
 };
+use axum_extra::extract::Query;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
-use axum_extra::extract::Query;
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
-use itertools::Itertools;
 
-use crate::app::models::{IdentifierId, Set};
-use crate::app::routes::response::StreamingResponse;
-use crate::app::services::{ResourceOutcome, SetSearchFilter};
+use crate::app::services::ResourceOutcome;
+use crate::app::{
+    models::{IdentifierId, Set},
+    services,
+};
+use crate::app::{routes::response::StreamingResponse, search_filter::SearchFilter};
 use crate::{
     app::{
         models::{Entity, EntityId, SetId, TopicId},
@@ -27,7 +30,6 @@ use crate::{
     },
     error::{ServiceError, SetServiceError},
 };
-use crate::app::search_filter::{SearchFilter};
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -230,28 +232,24 @@ async fn search_sets<T>(
 where
     T: Repository + Debug,
 {
-    let mut search_criteria = SetSearchFilter::criteria(pagination);
-    
+    let mut search_criteria = services::SetSearch::criteria(pagination);
+
     if let Some(name) = name {
-        search_criteria.add(SetSearchFilter::Name(name));
+        search_criteria.add(services::SetSearch::Name(name));
     }
-    
+
     if let Some(entity_text) = entity_text {
-        search_criteria.add(SetSearchFilter::EntityText(entity_text));
+        search_criteria.add(services::SetSearch::EntityText(entity_text));
     }
-    
+
     if let Some(identifiers) = identifiers {
-        search_criteria.add(SetSearchFilter::Identifiers(identifiers));
+        search_criteria.add(services::SetSearch::Identifiers(identifiers));
     }
-    
-    let Some(sets) = service
-        .sets
-        .search(topic_id, search_criteria)
-        .await?
-    else {
+
+    let Some(sets) = service.sets.search(topic_id, search_criteria).await? else {
         return Ok(StatusCode::NOT_FOUND.into_response());
     };
-    
+
     if sets.is_empty() {
         Ok(StatusCode::NO_CONTENT.into_response())
     } else {

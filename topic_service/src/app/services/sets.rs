@@ -1,6 +1,7 @@
 use crate::app::models::{IdentifierId, Set};
 use crate::app::pagination::Pagination;
 use crate::app::repository::{Repository, SetRepository, TopicRepoError, TopicRepository};
+use crate::app::search_filter::{SearchCriteria, SearchFilter, Tag};
 use crate::app::services::ResourceOutcome;
 use crate::{
     app::models::{SetId, TopicId},
@@ -9,7 +10,6 @@ use crate::{
 use error_stack::ResultExt;
 use serde_json::Value;
 use tracing::{debug, info, instrument};
-use crate::app::search_filter::{SearchCriteria, SearchFilter, Tag};
 
 #[derive(Debug, Clone)]
 pub struct SetService<T> {
@@ -18,22 +18,22 @@ pub struct SetService<T> {
 
 const DEFAULT_SET_PAGE_SIZE: usize = 10;
 
-pub type SetSearchCriteria = SearchCriteria<SetSearchFilter, 3>;
+pub type SetSearchCriteria = SearchCriteria<SetSearch, 3>;
 
-pub enum SetSearchFilter {
+pub enum SetSearch {
     Name(String),
     EntityText(String),
     Identifiers(Vec<IdentifierId>),
 }
 
-impl SearchFilter for SetSearchFilter {
+impl SearchFilter for SetSearch {
     type Criteria = SetSearchCriteria;
 
     fn tag(&self) -> Tag {
         match self {
-            SetSearchFilter::Name(_) => Tag::One,
-            SetSearchFilter::EntityText(_) => Tag::Two,
-            SetSearchFilter::Identifiers(_) => Tag::Four,
+            SetSearch::Name(_) => Tag::One,
+            SetSearch::EntityText(_) => Tag::Two,
+            SetSearch::Identifiers(_) => Tag::Four,
         }
     }
 
@@ -41,7 +41,6 @@ impl SearchFilter for SetSearchFilter {
         SearchCriteria::new(pagination, DEFAULT_SET_PAGE_SIZE)
     }
 }
-
 
 // TODO have all `delete` operations return a not-found-like response if any of the
 // requested resources do not exist
