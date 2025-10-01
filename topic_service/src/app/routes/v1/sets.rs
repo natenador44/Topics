@@ -14,7 +14,7 @@ use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
-use crate::app::services::ResourceOutcome;
+use crate::app::services::{ResourceOutcome, SetSearch};
 use crate::app::{
     models::{IdentifierId, Set},
     services,
@@ -185,7 +185,7 @@ where
 }
 
 #[derive(Debug, Deserialize)]
-struct SetSearch {
+struct SetSearchQueries {
     /// Find all sets whose name fuzzy matches this name.
     name: Option<String>,
     /// Find all sets whose entities contain this text (fuzzy search)
@@ -222,28 +222,28 @@ struct SetSearch {
 async fn search_sets<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
-    Query(SetSearch {
+    Query(SetSearchQueries {
         name,
         entity_text,
         identifiers,
-    }): Query<SetSearch>,
+    }): Query<SetSearchQueries>,
     Query(pagination): Query<Pagination>,
 ) -> Result<Response, ServiceError<SetServiceError>>
 where
     T: Repository + Debug,
 {
-    let mut search_criteria = services::SetSearch::criteria(pagination);
+    let mut search_criteria = SetSearch::criteria(pagination);
 
     if let Some(name) = name {
-        search_criteria.add(services::SetSearch::Name(name));
+        search_criteria.add(SetSearch::Name(name));
     }
 
     if let Some(entity_text) = entity_text {
-        search_criteria.add(services::SetSearch::EntityText(entity_text));
+        search_criteria.add(SetSearch::EntityText(entity_text));
     }
 
     if let Some(identifiers) = identifiers {
-        search_criteria.add(services::SetSearch::Identifiers(identifiers));
+        search_criteria.add(SetSearch::Identifiers(identifiers));
     }
 
     let Some(sets) = service.sets.search(topic_id, search_criteria).await? else {

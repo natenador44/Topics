@@ -303,34 +303,6 @@ async fn get_set_returns_not_found_if_topic_does_not_exist() {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn get_set_returns_not_found_if_set_does_not_exist() {
-    let topic_id = TopicId::new();
-    let set_id = SetId::new();
-
-    let mut set_repo = MockSetRepository::new();
-    set_repo
-        .expect_get()
-        .with(predicate::eq(topic_id), predicate::eq(set_id))
-        .return_once(return_scenario::get::not_found);
-
-    let mut topic_repo = MockTopicRepository::new();
-    topic_repo
-        .expect_exists()
-        .with(predicate::eq(topic_id))
-        .return_once(return_scenario::topic_exists(true));
-
-    let response = run_get_endpoint(
-        &format!("/api/v1/topics/{topic_id}/sets/{set_id}"),
-        set_repo,
-        topic_repo,
-    )
-    .await;
-
-    response.assert_status_not_found();
-}
-
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
 async fn get_set_returns_internal_server_error_if_topic_repo_returns_error() {
     let topic_id = TopicId::new();
     let set_id = SetId::new();
@@ -637,25 +609,21 @@ mod return_scenario {
             topic_id: TopicId,
             set_id: SetId,
             name: impl ToString,
-        ) -> impl FnOnce(TopicId, SetId) -> SetMockReturn<'static, Option<Set>> {
+        ) -> impl FnOnce(TopicId, SetId) -> SetMockReturn<'static, Set> {
             let name = name.to_string();
             move |_, _| {
                 async move {
-                    Ok(Some(Set {
+                    Ok(Set {
                         id: set_id,
                         topic_id,
                         name,
-                    }))
+                    })
                 }
                 .boxed()
             }
         }
 
-        pub fn not_found<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, Option<Set>> {
-            async { Ok(None) }.boxed()
-        }
-
-        pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, Option<Set>> {
+        pub fn error<'a>(_: TopicId, _: SetId) -> SetMockReturn<'a, Set> {
             async { Err(SetRepoError::Get.into_report()) }.boxed()
         }
     }

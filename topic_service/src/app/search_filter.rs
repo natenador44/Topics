@@ -23,6 +23,7 @@ impl Tag {
 }
 
 pub trait SearchFilter {
+    const MAX_FILTER_COUNT: usize;
     type Criteria;
     fn tag(&self) -> Tag;
     fn criteria(pagination: Pagination) -> Self::Criteria;
@@ -43,6 +44,8 @@ How about HashSet?
 /// ```compile_fail
 /// enum TestFilter { Test1 }
 /// let _ = SearchCriteria::<TestFilter, 256>::new(Pagination { page: 1, page_size: None }, 0);
+
+#[derive(Debug)]
 pub struct SearchCriteria<T, const N: usize> {
     inner: Box<SearchCriteriaInner<T, N>>,
 }
@@ -84,6 +87,7 @@ impl<T, const N: usize> SearchCriteria<T, N> {
     }
 }
 
+#[derive(Debug)]
 struct SearchCriteriaInner<T, const N: usize> {
     filters: Option<SearchCriteriaFilters<T, N>>,
     pagination: Pagination,
@@ -112,6 +116,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct SearchCriteriaFilters<T, const N: usize> {
     filters: [MaybeUninit<T>; N],
     applied_count: MAX_FILTER_COUNT_TYPE,
@@ -151,7 +156,8 @@ mod tests {
     }
 
     impl SearchFilter for TestSearch {
-        type Criteria = SearchCriteria<Self, 3>;
+        const MAX_FILTER_COUNT: usize = 3;
+        type Criteria = SearchCriteria<Self, { Self::MAX_FILTER_COUNT }>;
 
         fn tag(&self) -> Tag {
             match self {

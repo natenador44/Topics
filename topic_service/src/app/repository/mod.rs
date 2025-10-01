@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::error::AppResult;
 
 use crate::app::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
-use crate::app::services::ResourceOutcome;
+use crate::app::services::{ResourceOutcome, SetSearchCriteria};
 
 pub mod file;
 
@@ -43,6 +43,8 @@ pub enum SetRepoError {
     Get,
     #[error("failed to delete set")]
     Delete,
+    #[error("failed to search sets")]
+    Search,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94,6 +96,11 @@ pub trait IdentifierRepository {}
 
 #[cfg_attr(test, mockall::automock)]
 pub trait SetRepository {
+    fn search(
+        &self,
+        topic_id: TopicId,
+        search_criteria: SetSearchCriteria,
+    ) -> impl Future<Output = AppResult<Vec<Set>, SetRepoError>> + Send;
     fn create(
         &self,
         topic_id: TopicId,
@@ -105,7 +112,7 @@ pub trait SetRepository {
         &self,
         topic_id: TopicId,
         set_id: SetId,
-    ) -> impl Future<Output = AppResult<Option<Set>, SetRepoError>> + Send;
+    ) -> impl Future<Output = AppResult<Set, SetRepoError>> + Send;
 
     fn delete(
         &self,

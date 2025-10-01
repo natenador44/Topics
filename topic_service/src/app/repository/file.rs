@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::app::models::EntityId;
-use crate::app::services::ResourceOutcome;
+use crate::app::services::{ResourceOutcome, SetSearch, SetSearchCriteria};
 use crate::app::{
     models::Topic,
     repository::{IdentifierRepository, Repository, SetRepository, TopicFilter, TopicRepository},
@@ -382,6 +382,14 @@ struct TopicSetWithEntities<N: Into<String>> {
 }
 
 impl SetRepository for FileSetRepo {
+    async fn search(
+        &self,
+        topic_id: TopicId,
+        search_criteria: SetSearchCriteria,
+    ) -> AppResult<Vec<Set>, SetRepoError> {
+        Ok(Vec::new())
+    }
+
     #[instrument(skip_all, name = "repo#create")]
     async fn create(
         &self,
@@ -438,14 +446,10 @@ impl SetRepository for FileSetRepo {
     }
 
     #[instrument(skip_all, name = "repo#get")]
-    async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Option<Set>, SetRepoError> {
+    async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Set, SetRepoError> {
         let _guard = self.lock.read().await;
 
         let set_file_path = generate_set_file_path(topic_id, set_id);
-
-        if !set_file_path.exists() {
-            return Ok(None);
-        }
 
         #[derive(Deserialize)]
         struct JustSetName {
@@ -455,11 +459,11 @@ impl SetRepository for FileSetRepo {
         let JustSetName { name } =
             load_data::<JustSetName>(&set_file_path).change_context(SetRepoError::Get)?;
 
-        Ok(Some(Set {
+        Ok(Set {
             id: set_id,
             topic_id,
             name,
-        }))
+        })
     }
 
     #[instrument(skip_all, name = "repo#delete")]

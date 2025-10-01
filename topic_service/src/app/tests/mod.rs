@@ -2,7 +2,7 @@
 //! e.g. return codes, handling query parameters, handling path parameters.
 use crate::app::models::{Entity, EntityId, Set, SetId, TopicId};
 use crate::app::repository::SetRepoError;
-use crate::app::services::ResourceOutcome;
+use crate::app::services::{ResourceOutcome, SetSearchCriteria};
 use crate::app::{
     models::Topic,
     repository::{
@@ -132,6 +132,14 @@ impl Deref for MockSetRepoWrapper {
 }
 
 impl SetRepository for MockSetRepoWrapper {
+    async fn search(
+        &self,
+        topic_id: TopicId,
+        search_criteria: SetSearchCriteria,
+    ) -> AppResult<Vec<Set>, SetRepoError> {
+        self.0.search(topic_id, search_criteria).await
+    }
+
     async fn create(
         &self,
         topic_id: TopicId,
@@ -143,7 +151,7 @@ impl SetRepository for MockSetRepoWrapper {
             .await
     }
 
-    async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Option<Set>, SetRepoError> {
+    async fn get(&self, topic_id: TopicId, set_id: SetId) -> AppResult<Set, SetRepoError> {
         self.0.get(topic_id, set_id).await
     }
 

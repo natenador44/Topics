@@ -9,7 +9,7 @@ use crate::{
 };
 use error_stack::ResultExt;
 use serde_json::Value;
-use tracing::{debug, info, instrument};
+use tracing::{Span, debug, info, instrument};
 
 #[derive(Debug, Clone)]
 pub struct SetService<T> {
@@ -18,7 +18,8 @@ pub struct SetService<T> {
 
 const DEFAULT_SET_PAGE_SIZE: usize = 10;
 
-pub type SetSearchCriteria = SearchCriteria<SetSearch, 3>;
+const MAX_SEARCH_FILTER_COUNT: usize = 3;
+pub type SetSearchCriteria = SearchCriteria<SetSearch, MAX_SEARCH_FILTER_COUNT>;
 
 pub enum SetSearch {
     Name(String),
@@ -27,6 +28,7 @@ pub enum SetSearch {
 }
 
 impl SearchFilter for SetSearch {
+    const MAX_FILTER_COUNT: usize = MAX_SEARCH_FILTER_COUNT;
     type Criteria = SetSearchCriteria;
 
     fn tag(&self) -> Tag {
@@ -53,13 +55,41 @@ where
         Self { repo }
     }
 
-    #[instrument(skip_all, name = "service#search")]
+    #[instrument(skip_all, name = "service#search", fields(sets_found))]
     pub async fn search(
         &self,
         topic_id: TopicId,
         search_criteria: SetSearchCriteria,
     ) -> AppResult<Option<Vec<Set>>, SetServiceError> {
-        todo!()
+        info!("searching sets..");
+        // check if topic exists here, or have the repo tell the server?
+        // think about it..
+        // if we're using postgres, what would the data look like?
+        // we'd have some sql like "where topic_id = :topic_id [and filter [ and filter]]", or
+        // it would be a join of some kind. That would just result in an empty list, which is
+        // not a 404 in this case. So I think I need to check first.
+        let topic_exists = self
+            .topic_exists(topic_id)
+            .await
+            .change_context(SetServiceError)?;
+
+        if !topic_exists {
+            debug!("topic does not exist");
+            return Ok(None);
+        }
+
+        let sets = self
+            .repo
+            .sets()
+            .search(topic_id, search_criteria)
+            .await
+            .change_context(SetServiceError)?;
+
+        Span::current().record("sets_found", sets.len());
+
+        info!("search complete");
+
+        Ok(Some(sets))
     }
 
     /// Create a new `Set` under the given `Topic` (`topic_id`).
@@ -74,14 +104,12 @@ where
         initial_entity_payloads: Option<Vec<Value>>,
     ) -> AppResult<Option<Set>, SetServiceError> {
         info!("creating set...");
-        debug!("checking if topic exists");
         let topic_exists = self
             .topic_exists(topic_id)
             .await
             .change_context(SetServiceError)?;
 
         if !topic_exists {
-            debug!("topic does not exist");
             return Ok(None);
         };
 
@@ -117,11 +145,13 @@ where
             return Ok(None);
         }
 
-        self.repo
+        let set = self
+            .repo
             .sets()
             .get(topic_id, set_id)
             .await
-            .change_context(SetServiceError)
+            .change_context(SetServiceError)?;
+        Ok(Some(set))
     }
 
     #[instrument(skip_all, name = "service#delete")]
@@ -152,7 +182,9 @@ where
     the 'set' data and the 'topic' data in sync. How this is done may change in the future.
      */
     // TODO see if this could be an extractor instead
+    #[instrument(skip(self), ret)]
     async fn topic_exists(&self, topic_id: TopicId) -> AppResult<bool, TopicRepoError> {
+        debug!("checking if topic exists..");
         self.repo.topics().exists(topic_id).await
     }
 }
