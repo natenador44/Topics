@@ -1,0 +1,12 @@
+[package]
+name = "topics_app_pg"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+topic_routes = { path = "../topic_routes" }
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
+engine = { path = "../engine" }
+postgres_repository = { path = "../postgres_repository" }
