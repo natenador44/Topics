@@ -1,8 +1,10 @@
 use engine::error::{RepoResult, SetRepoError, TopicRepoError};
 use engine::models::{Set, SetId, Topic, TopicId};
-use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
-use engine::repository::{EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository};
 use engine::repository::sets::{ExistingSetRepository, SetUpdate};
+use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
+use engine::repository::{
+    EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository,
+};
 use engine::search_filters::{SetSearchCriteria, TopicSearchCriteria};
 
 pub struct TopicRepo; // TODO postgres pool
@@ -10,7 +12,10 @@ pub struct TopicRepo; // TODO postgres pool
 impl TopicsRepository for TopicRepo {
     type ExistingTopic = ExistingTopicRepo;
 
-    async fn expect_existing(&self, topic_id: TopicId) -> RepoResult<Option<Self::ExistingTopic>, TopicRepoError> {
+    async fn expect_existing(
+        &self,
+        topic_id: TopicId,
+    ) -> RepoResult<Option<Self::ExistingTopic>, TopicRepoError> {
         todo!()
     }
 
@@ -18,11 +23,18 @@ impl TopicsRepository for TopicRepo {
         todo!()
     }
 
-    async fn create(&self, name: String, description: Option<String>) -> RepoResult<Topic, TopicRepoError> {
+    async fn create(
+        &self,
+        name: String,
+        description: Option<String>,
+    ) -> RepoResult<Topic, TopicRepoError> {
         todo!()
     }
 
-    async fn search(&self, topic_search_criteria: TopicSearchCriteria) ->RepoResult<Vec<Topic>, TopicRepoError> {
+    async fn search(
+        &self,
+        topic_search_criteria: TopicSearchCriteria,
+    ) -> RepoResult<Vec<Topic>, TopicRepoError> {
         todo!()
     }
 }
@@ -55,7 +67,10 @@ pub struct SetRepo; // TODO postgres pool
 impl SetsRepository for SetRepo {
     type ExistingSet = ExistingSetRepo;
 
-    async fn expect_existing(&self, set: SetId) -> RepoResult<Option<Self::ExistingSet>, SetRepoError> {
+    async fn expect_existing(
+        &self,
+        set: SetId,
+    ) -> RepoResult<Option<Self::ExistingSet>, SetRepoError> {
         todo!()
     }
 
@@ -63,11 +78,18 @@ impl SetsRepository for SetRepo {
         todo!()
     }
 
-    async fn create(&self, name: String, initial_entity_payloads: Vec<serde_json::value::Value>) -> RepoResult<Set, SetRepoError> {
+    async fn create(
+        &self,
+        name: String,
+        initial_entity_payloads: Vec<serde_json::value::Value>,
+    ) -> RepoResult<Set, SetRepoError> {
         todo!()
     }
 
-    async fn search(&self, set_search_criteria: SetSearchCriteria) -> RepoResult<Vec<Set>, SetRepoError> {
+    async fn search(
+        &self,
+        set_search_criteria: SetSearchCriteria,
+    ) -> RepoResult<Vec<Set>, SetRepoError> {
         todo!()
     }
 }

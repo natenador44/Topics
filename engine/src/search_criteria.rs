@@ -7,7 +7,7 @@ const MAX: u8 = u8::MAX;
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
-pub(crate) enum Tag {
+pub enum Tag {
     One = 1,
     Two = 2,
     Four = 4,
@@ -45,7 +45,7 @@ How about HashSet?
 /// enum TestFilter { Test1 }
 /// let _ = SearchCriteria::<TestFilter, 256>::new(Pagination { page: 1, page_size: None }, 0);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SearchCriteria<T, const N: usize> {
     inner: Box<SearchCriteriaInner<T, N>>,
 }
@@ -80,14 +80,11 @@ impl<T, const N: usize> SearchCriteria<T, N> {
     }
 
     pub fn filters(&self) -> Option<&[T]> {
-        self.inner
-            .filters
-            .as_ref()
-            .map(|f| unsafe { std::mem::transmute(&f.filters[..f.applied_count as usize]) })
+        self.inner.filters.as_ref().map(|f| f.get())
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct SearchCriteriaInner<T, const N: usize> {
     filters: Option<SearchCriteriaFilters<T, N>>,
     pagination: Pagination,
@@ -114,6 +111,11 @@ where
 
         self
     }
+
+    pub fn with(mut self, filter: T) -> Self {
+        self.add(filter);
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -123,6 +125,19 @@ struct SearchCriteriaFilters<T, const N: usize> {
     applied: MaxFilterCountType,
 }
 
+impl<T, const N: usize> PartialEq for SearchCriteriaFilters<T, N>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.applied == other.applied
+            && self.applied_count == other.applied_count
+            && self.get() == other.get()
+    }
+}
+
+impl<T, const N: usize> Eq for SearchCriteriaFilters<T, N> where T: Eq {}
+
 impl<T, const N: usize> SearchCriteriaFilters<T, N> {
     fn new() -> Self {
         Self {
@@ -130,6 +145,10 @@ impl<T, const N: usize> SearchCriteriaFilters<T, N> {
             applied_count: 0,
             applied: Tag::NONE,
         }
+    }
+
+    fn get(&self) -> &[T] {
+        unsafe { std::mem::transmute(&self.filters[..self.applied_count as usize]) }
     }
 }
 

@@ -1,6 +1,6 @@
-use tracing::error;
 use engine::Engine;
 use topic_routes::AppProperties;
+use tracing::error;
 
 #[derive(Debug, Clone)]
 struct AppEngine;

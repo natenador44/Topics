@@ -4,6 +4,7 @@ use crate::repository::sets::ExistingSetRepository;
 use crate::repository::topics::ExistingTopicRepository;
 use crate::search_filters::{SetSearchCriteria, TopicSearchCriteria};
 use serde_json::Value;
+use std::sync::Arc;
 
 pub mod sets;
 pub mod topics;
@@ -59,3 +60,36 @@ pub trait SetsRepository {
 }
 pub trait EntitiesRepository {}
 pub trait IdentifiersRepository {}
+
+impl<T> TopicsRepository for Arc<T>
+where
+    T: TopicsRepository + Send + Sync,
+{
+    type ExistingTopic = T::ExistingTopic;
+
+    async fn expect_existing(
+        &self,
+        topic_id: TopicId,
+    ) -> RepoResult<Option<Self::ExistingTopic>, TopicRepoError> {
+        (&**self).expect_existing(topic_id).await
+    }
+
+    async fn find(&self, topic_id: TopicId) -> RepoResult<Option<Topic>, TopicRepoError> {
+        (&**self).find(topic_id).await
+    }
+
+    async fn create(
+        &self,
+        name: String,
+        description: Option<String>,
+    ) -> RepoResult<Topic, TopicRepoError> {
+        (&**self).create(name, description).await
+    }
+
+    async fn search(
+        &self,
+        topic_search_criteria: TopicSearchCriteria,
+    ) -> RepoResult<Vec<Topic>, TopicRepoError> {
+        (&**self).search(topic_search_criteria).await
+    }
+}

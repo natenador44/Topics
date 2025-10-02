@@ -4,7 +4,7 @@ use crate::repository::{IdentifiersRepository, SetsRepository};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 pub struct TopicUpdate {
     pub name: Option<String>,
     pub description: Option<String>,
