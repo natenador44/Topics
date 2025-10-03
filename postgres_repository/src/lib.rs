@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use engine::error::{RepoResult, SetRepoError, TopicRepoError};
 use engine::models::{Set, SetId, Topic, TopicId};
 use engine::repository::sets::{ExistingSetRepository, SetUpdate};
@@ -6,8 +8,60 @@ use engine::repository::{
     EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository,
 };
 use engine::search_filters::{SetSearchCriteria, TopicSearchCriteria};
+use error_stack::{Report, ResultExt};
+use tokio_postgres::types::Type;
+use tokio_postgres::{Client, Config, NoTls, Statement};
+use tracing::error;
 
-pub struct TopicRepo; // TODO postgres pool
+pub struct ConnectionDetails {
+    pub user: String,
+    pub password: String,
+    pub database: String,
+    pub port: u16,
+}
+
+pub type RepoInitResult = std::result::Result<TopicRepo, Report<RepoInitErr>>;
+
+const TOPIC_EXISTS: &str = "select 1 from topics where topic_id = $1";
+
+#[derive(Debug, thiserror::Error)]
+#[error("failed to intialize postgres repository")]
+pub struct RepoInitErr;
+
+pub async fn init(
+    runtime: tokio::runtime::Handle,
+    connection_details: ConnectionDetails,
+) -> RepoInitResult {
+    let (client, connection) = Config::new()
+        .user(connection_details.user)
+        .password(connection_details.password)
+        .dbname(connection_details.database)
+        .port(connection_details.port)
+        .connect(NoTls)
+        .await
+        .change_context(RepoInitErr)?;
+
+    runtime.spawn(async move {
+        if let Err(e) = connection.await {
+            error!("postgres connection error: {e:?}");
+        }
+    });
+
+    let exists_statement = client
+        .prepare_typed(TOPIC_EXISTS, &[Type::UUID])
+        .await
+        .change_context(RepoInitErr)?;
+
+    Ok(TopicRepo {
+        client: Arc::new(client),
+        exists_statement,
+    })
+}
+
+pub struct TopicRepo {
+    client: Arc<Client>,
+    exists_statement: Statement,
+}
 
 impl TopicsRepository for TopicRepo {
     type ExistingTopic = ExistingTopicRepo;
@@ -16,7 +70,12 @@ impl TopicsRepository for TopicRepo {
         &self,
         topic_id: TopicId,
     ) -> RepoResult<Option<Self::ExistingTopic>, TopicRepoError> {
-        todo!()
+        Ok(self
+            .client
+            .query_opt(&self.exists_statement, &[&topic_id.0])
+            .await
+            .change_context(TopicRepoError::Exists)?
+            .map(|_| ExistingTopicRepo(Arc::clone(&self.client))))
     }
 
     async fn find(&self, topic_id: TopicId) -> RepoResult<Option<Topic>, TopicRepoError> {
@@ -39,7 +98,7 @@ impl TopicsRepository for TopicRepo {
     }
 }
 
-pub struct ExistingTopicRepo; // TODO postgres pool
+pub struct ExistingTopicRepo(Arc<Client>); // TODO postgres pool
 
 impl ExistingTopicRepository for ExistingTopicRepo {
     type SetRepo = SetRepo;

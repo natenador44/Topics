@@ -7,7 +7,7 @@ use uuid::Uuid;
 #[repr(transparent)]
 #[serde(transparent)]
 #[schema(as = uuid::Uuid)]
-pub struct TopicId(Uuid);
+pub struct TopicId(pub Uuid);
 impl TopicId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())

@@ -1,4 +1,3 @@
-use crate::app;
 use crate::app::services::SetService;
 use crate::app::tests::{MockExistingTopicRepo, MockTopicRepo, TestEngine};
 use crate::app::{
@@ -10,7 +9,6 @@ use axum::http::StatusCode;
 use axum_test::{TestResponse, TestServer};
 use engine::Pagination;
 use engine::models::{Topic, TopicId};
-use engine::repository::TopicsRepository;
 use engine::repository::topics::TopicUpdate;
 use engine::search_criteria::SearchFilter;
 use engine::search_filters::TopicFilter;
@@ -779,7 +777,6 @@ mod return_scenario {
     use engine::error::{RepoResult, TopicRepoError};
     use engine::models::{Topic, TopicId};
     use error_stack::IntoReport;
-    use futures::{FutureExt, future::BoxFuture};
 
     pub mod search {
         use super::*;
@@ -833,16 +830,9 @@ mod return_scenario {
 
     pub mod delete {
         use super::*;
-        use crate::app::services::ResourceOutcome;
 
         pub fn success<'a>() -> RepoResult<(), TopicRepoError> {
             Ok(())
-        }
-
-        pub fn not_found<'a>(
-            _: TopicId,
-        ) -> BoxFuture<'a, AppResult<ResourceOutcome, TopicRepoError>> {
-            async { Ok(ResourceOutcome::NotFound) }.boxed()
         }
 
         pub fn error<'a>() -> RepoResult<(), TopicRepoError> {
@@ -872,19 +862,12 @@ mod return_scenario {
 
     pub mod update {
         use super::*;
-        use crate::app::tests::MockExistingTopicRepo;
         use engine::repository::topics::TopicUpdate;
 
         pub fn success<'a>(
             topic: Topic,
         ) -> impl FnOnce(TopicUpdate) -> RepoResult<Topic, TopicRepoError> {
             move |_| Ok(topic)
-        }
-
-        pub fn not_found<'a>(
-            _: TopicUpdate,
-        ) -> RepoResult<Option<MockExistingTopicRepo>, TopicRepoError> {
-            Ok(None)
         }
 
         pub fn error<'a>(_: TopicUpdate) -> RepoResult<Topic, TopicRepoError> {
