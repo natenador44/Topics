@@ -4,9 +4,10 @@ create table if not exists topics (
     description varchar(4096),
     name_tsv tsvector default null,
     description_tsv tsvector default null,
-    created timestamp default now(),
-    updated timestamp default null
-    );
+    created timestamp with time zone default now(),
+    updated timestamp with time zone default null
+);
+
 
 create index if not exists topics_name_idx on topics using GIN (to_tsvector('english', name));
 create index if not exists topics_description_idx on topics using GIN (to_tsvector('english', description));

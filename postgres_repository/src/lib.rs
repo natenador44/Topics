@@ -8,20 +8,24 @@ use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
 use engine::repository::{
     EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository,
 };
-use engine::search_filters::{SetSearchCriteria, TopicSearchCriteria};
+use engine::search_filters::{SetSearchCriteria, TopicFilter, TopicSearchCriteria};
 use error_stack::{Report, ResultExt};
 use tokio_postgres::types::Type;
-use tokio_postgres::{Client, Config, NoTls, Statement};
+use tokio_postgres::{Client, Config, NoTls, Row, Statement, connect};
 use tracing::error;
 
 mod connection;
 mod migration;
 
-pub struct ConnectionDetails {
-    pub user: String,
-    pub password: String,
-    pub database: String,
-    pub port: u16,
+pub enum ConnectionDetails {
+    Url(String),
+    Individual {
+        user: String,
+        password: String,
+        database: String,
+        port: u16,
+        host: String,
+    },
 }
 
 pub type RepoInitResult<T> = Result<T, Report<RepoInitErr>>;
@@ -34,14 +38,12 @@ pub async fn init(
     runtime: tokio::runtime::Handle,
     connection_details: ConnectionDetails,
 ) -> RepoInitResult<TopicRepo> {
-    let (mut client, connection) = Config::new()
-        .user(connection_details.user)
-        .password(connection_details.password)
-        .dbname(connection_details.database)
-        .port(connection_details.port)
-        .connect(NoTls)
-        .await
-        .change_context(RepoInitErr)?;
+    let (mut client, connection) = match connection_details {
+        ConnectionDetails::Url(url) => connect(&url, NoTls).await.change_context(RepoInitErr)?,
+        ConnectionDetails::Individual { .. } => {
+            todo!("individual connection components not supported yet")
+        }
+    };
 
     runtime.spawn(async move {
         if let Err(e) = connection.await {
@@ -56,8 +58,19 @@ pub async fn init(
     })
 }
 
+#[derive(Debug, Clone)]
 pub struct TopicRepo {
     connection: DbConnection,
+}
+
+fn row_to_topic(row: Row) -> Topic {
+    Topic {
+        id: TopicId(row.get("id")),
+        name: row.get("name"),
+        description: row.get("description"),
+        created: row.get("created"),
+        updated: row.get("updated"),
+    }
 }
 
 impl TopicsRepository for TopicRepo {
@@ -77,7 +90,14 @@ impl TopicsRepository for TopicRepo {
     }
 
     async fn find(&self, topic_id: TopicId) -> RepoResult<Option<Topic>, TopicRepoError> {
-        todo!()
+        let result = self
+            .connection
+            .client
+            .query_opt(&self.connection.statements.topics.find, &[&topic_id.0])
+            .await
+            .change_context(TopicRepoError::Get)?;
+
+        Ok(result.map(row_to_topic))
     }
 
     async fn create(
@@ -85,14 +105,61 @@ impl TopicsRepository for TopicRepo {
         name: String,
         description: Option<String>,
     ) -> RepoResult<Topic, TopicRepoError> {
-        todo!()
+        let id = TopicId::new();
+        let row = self
+            .connection
+            .client
+            .query_one(
+                &self.connection.statements.topics.create,
+                &[&id.0, &name, &description],
+            )
+            .await
+            .change_context(TopicRepoError::Create)?;
+
+        // may eventually grab id, name, and description from the insert call
+        // this prevents extra memory allocation though
+        Ok(Topic {
+            id,
+            name,
+            description,
+            created: row.get("created"),
+            updated: None,
+        })
     }
 
     async fn search(
         &self,
         topic_search_criteria: TopicSearchCriteria,
     ) -> RepoResult<Vec<Topic>, TopicRepoError> {
-        todo!()
+        let client = &self.connection.client;
+        let statements = &self.connection.statements;
+        let page = topic_search_criteria.page().saturating_sub(1); // assuming users send '1' to specify the first page... we'll see if this sticks, not sure what standard is
+        let page_size = topic_search_criteria.page_size();
+
+        let result = match topic_search_criteria.filters() {
+            Some([TopicFilter::Name(name), TopicFilter::Description(desc)]) => client
+                .query(
+                    &statements.topics.name_desc_search,
+                    &[name, desc, &page, &page_size],
+                )
+                .await
+                .change_context(TopicRepoError::Search)?,
+            Some([TopicFilter::Name(name)]) => client
+                .query(&statements.topics.name_search, &[name, &page, &page_size])
+                .await
+                .change_context(TopicRepoError::Search)?,
+            Some([TopicFilter::Description(desc)]) => client
+                .query(&statements.topics.desc_search, &[desc, &page, &page_size])
+                .await
+                .change_context(TopicRepoError::Search)?,
+            Some(_) => unreachable!("currently only two topic filters exist"),
+            None => client
+                .query(&statements.topics.full_search, &[&page, &page_size])
+                .await
+                .change_context(TopicRepoError::Search)?,
+        };
+
+        Ok(result.into_iter().map(row_to_topic).collect())
     }
 }
 

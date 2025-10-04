@@ -26,7 +26,7 @@ pub trait SearchFilter {
     const MAX_FILTER_COUNT: usize;
     type Criteria;
     fn tag(&self) -> Tag;
-    fn criteria(pagination: Pagination, default_page_size: usize) -> Self::Criteria;
+    fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria;
 }
 
 /*
@@ -51,7 +51,7 @@ pub struct SearchCriteria<T, const N: usize> {
 }
 
 impl<T, const N: usize> SearchCriteria<T, N> {
-    pub fn new(pagination: Pagination, default_page_size: usize) -> Self {
+    pub fn new(pagination: Pagination, default_page_size: u32) -> Self {
         const {
             assert!(
                 N <= MaxFilterCountType::MAX as usize,
@@ -68,11 +68,11 @@ impl<T, const N: usize> SearchCriteria<T, N> {
         }
     }
 
-    pub fn page(&self) -> usize {
+    pub fn page(&self) -> u32 {
         self.inner.pagination.page
     }
 
-    pub fn page_size(&self) -> usize {
+    pub fn page_size(&self) -> u32 {
         self.inner
             .pagination
             .page_size
@@ -88,7 +88,7 @@ impl<T, const N: usize> SearchCriteria<T, N> {
 struct SearchCriteriaInner<T, const N: usize> {
     filters: Option<SearchCriteriaFilters<T, N>>,
     pagination: Pagination,
-    default_page_size: usize,
+    default_page_size: u32,
 }
 
 impl<T, const N: usize> SearchCriteria<T, N>
@@ -186,7 +186,7 @@ mod tests {
             }
         }
 
-        fn criteria(pagination: Pagination, default_page_size: usize) -> Self::Criteria {
+        fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria {
             SearchCriteria::new(pagination, default_page_size)
         }
     }

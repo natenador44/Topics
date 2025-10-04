@@ -1,3 +1,4 @@
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
@@ -25,6 +26,8 @@ pub struct Topic {
     pub id: TopicId,
     pub name: String,
     pub description: Option<String>,
+    pub created: DateTime<Utc>,
+    pub updated: Option<DateTime<Utc>>,
 }
 
 impl PartialEq for Topic {
@@ -39,6 +42,8 @@ impl Topic {
             id,
             name,
             description,
+            created: Utc::now(),
+            updated: None,
         }
     }
 

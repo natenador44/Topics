@@ -22,7 +22,7 @@ impl SearchFilter for TopicFilter {
         }
     }
 
-    fn criteria(pagination: Pagination, default_page_size: usize) -> Self::Criteria {
+    fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria {
         SearchCriteria::new(pagination, default_page_size)
     }
 }
@@ -48,7 +48,7 @@ impl SearchFilter for SetFilter {
         }
     }
 
-    fn criteria(pagination: Pagination, default_page_size: usize) -> Self::Criteria {
+    fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria {
         SearchCriteria::new(pagination, default_page_size)
     }
 }

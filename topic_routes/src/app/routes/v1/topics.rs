@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::time::Duration;
 
 use crate::app::routes::response::StreamingResponse;
 use crate::app::services::ResourceOutcome;
@@ -15,12 +14,12 @@ use axum::{
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
 };
+use chrono::{DateTime, Utc};
 use engine::models::{Topic, TopicId};
 use engine::search_criteria::SearchFilter;
 use engine::search_filters::TopicFilter;
 use engine::{Engine, Pagination};
 use serde::{Deserialize, Serialize};
-use tokio_stream::StreamExt;
 use tracing::{info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
@@ -46,7 +45,7 @@ pub struct TopicSearch {
     name: Option<String>,
     description: Option<String>,
 }
-const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: usize = 25;
+const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u32 = 25;
 
 const TOPIC_SEARCH_PATH: &str = "/";
 const TOPIC_GET_PATH: &str = "/{topic_id}";
@@ -73,6 +72,8 @@ struct TopicResponse {
     id: TopicId,
     name: String,
     description: Option<String>,
+    created: DateTime<Utc>,
+    updated: Option<DateTime<Utc>>,
     sets_url: String,
     identifiers_url: String,
 }
@@ -84,6 +85,8 @@ impl TopicResponse {
             id: topic.id,
             name: topic.name,
             description: topic.description,
+            created: topic.created,
+            updated: topic.updated,
             sets_url: format!("/api/v1/topics/{}/sets", topic.id),
             identifiers_url: format!("/api/v1/topics/{}/identifiers", topic.id),
         }
@@ -95,6 +98,8 @@ impl TopicResponse {
             id: topic.id,
             name: topic.name,
             description: topic.description,
+            created: topic.created,
+            updated: topic.updated,
             sets_url: format!("/api/v1/topics/{}/sets", topic.id),
             identifiers_url: format!("/api/v1/topics/{}/identifiers", topic.id),
         }

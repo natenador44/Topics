@@ -10,3 +10,4 @@ tracing-subscriber = { workspace = true }
 tracing = { workspace = true }
 engine = { path = "../engine" }
 postgres_repository = { path = "../postgres_repository" }
+dotenv = "0.15.0"

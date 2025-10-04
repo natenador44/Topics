@@ -24,7 +24,7 @@ use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
-const DEFAULT_SET_PAGE_SIZE: usize = 10;
+const DEFAULT_SET_PAGE_SIZE: u32 = 10;
 
 #[derive(OpenApi)]
 #[openapi(paths(
