@@ -13,12 +13,13 @@ use engine::repository::topics::TopicUpdate;
 use engine::search_criteria::SearchFilter;
 use engine::search_filters::TopicFilter;
 use mockall::predicate;
+use optional_field::Field;
 use serde::Serialize;
 use serde_json::{Map, Number, Value, json};
 
 const DEFAULT_NAME: &str = "topic1";
 const DEFAULT_DESC: &str = "description1";
-const DEFAULT_PAGE_SIZE: usize = 25; // should equal what routes/v1/topics uses
+const DEFAULT_PAGE_SIZE: u32 = 25; // should equal what routes/v1/topics uses
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
@@ -607,8 +608,8 @@ async fn update_returns_ok_and_updated_topic_if_no_error() {
     existing_topic_repo
         .expect_update()
         .with(predicate::eq(TopicUpdate {
-            name: Some(new_name.clone()),
-            description: Some(new_desc.clone()),
+            name: Field::Present(Some(new_name.clone())),
+            description: Field::Present(Some(new_desc.clone())),
         }))
         .return_once(return_scenario::update::success(updated_topic.clone()));
 

@@ -10,9 +10,10 @@ use engine::repository::{
 };
 use engine::search_filters::{SetSearchCriteria, TopicFilter, TopicSearchCriteria};
 use error_stack::{Report, ResultExt};
+use optional_field::Field;
 use tokio_postgres::types::Type;
 use tokio_postgres::{Client, Config, NoTls, Row, Statement, connect};
-use tracing::error;
+use tracing::{debug, error};
 
 mod connection;
 mod migration;
@@ -86,7 +87,10 @@ impl TopicsRepository for TopicRepo {
             .query_opt(&self.connection.statements.topics.exists, &[&topic_id.0])
             .await
             .change_context(TopicRepoError::Exists)?
-            .map(|_| ExistingTopicRepo(self.connection.clone())))
+            .map(|_| ExistingTopicRepo {
+                topic_id,
+                conn: self.connection.clone(),
+            }))
     }
 
     async fn find(&self, topic_id: TopicId) -> RepoResult<Option<Topic>, TopicRepoError> {
@@ -163,7 +167,10 @@ impl TopicsRepository for TopicRepo {
     }
 }
 
-pub struct ExistingTopicRepo(DbConnection); // TODO postgres pool
+pub struct ExistingTopicRepo {
+    conn: DbConnection,
+    topic_id: TopicId,
+}
 
 impl ExistingTopicRepository for ExistingTopicRepo {
     type SetRepo = SetRepo;
@@ -182,7 +189,29 @@ impl ExistingTopicRepository for ExistingTopicRepo {
     }
 
     async fn update(&self, topic: TopicUpdate) -> RepoResult<Topic, TopicRepoError> {
-        todo!()
+        let row = match (topic.name, topic.description) {
+            (Field::Present(n), Field::Present(d)) => self.conn
+                .client
+                .query_one(&self.conn.statements.topics.update_name_desc, &[&n, &d, &self.topic_id.0])
+                .await
+                .change_context(TopicRepoError::Update)?,
+            (Field::Present(n), Field::Missing) => {
+                self.conn.client
+                    .query_one(&self.conn.statements.topics.update_name, &[&n, &self.topic_id.0])
+                    .await
+                    .change_context(TopicRepoError::Update)?
+            },
+            (Field::Missing, Field::Present(d)) => self.conn.client
+                .query_one(&self.conn.statements.topics.update_desc, &[&d, &self.topic_id.0])
+                .await
+                .change_context(TopicRepoError::Update)?,
+            _ => {
+                debug!("no changes requested, only reading topic");
+                self.conn.client.query_one(&self.conn.statements.topics.find, &[&self.topic_id.0]).await.change_context(TopicRepoError::Search)?
+            }
+        };
+
+        Ok(row_to_topic(row))
     }
 }
 

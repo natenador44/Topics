@@ -7,6 +7,7 @@ use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
 use engine::search_filters::{TopicFilter, TopicSearchCriteria};
 use engine::{Engine, Pagination};
 use error_stack::ResultExt;
+use optional_field::Field;
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -80,8 +81,8 @@ impl<T: Engine> TopicService<T> {
     pub async fn update(
         &self,
         topic_id: TopicId,
-        name: Option<String>,
-        description: Option<String>,
+        name: Field<String>,
+        description: Field<String>,
     ) -> AppResult<Option<Topic>, TopicServiceError> {
         let Some(topic) = self
             .engine

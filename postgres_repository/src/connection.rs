@@ -45,6 +45,9 @@ pub struct TopicPreparedStatements {
     pub name_search: Statement,
     pub desc_search: Statement,
     pub full_search: Statement,
+    pub update_name_desc: Statement,
+    pub update_name: Statement,
+    pub update_desc: Statement,
 }
 
 impl TopicPreparedStatements {
@@ -84,6 +87,18 @@ impl TopicPreparedStatements {
             full_search: client.prepare_typed(
                 "select id, name, description, created, updated from topics offset $1 limit $2",
                 &[Type::OID, Type::OID],
+            ).await.change_context(RepoInitErr)?,
+            update_name_desc: client.prepare_typed(
+                "update topics set name = $1, description = $2 where id = $3 returning id, name, description, created, updated",
+                &[Type::VARCHAR, Type::VARCHAR, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            update_name: client.prepare_typed(
+                "update topics set name = $1 where id = $2 returning id, name, description, created, updated",
+                &[Type::VARCHAR, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            update_desc: client.prepare_typed(
+                "update topics set description = $1 where id = $2 returning id, name, description, created, updated",
+                &[Type::VARCHAR, Type::UUID],
             ).await.change_context(RepoInitErr)?,
         };
 

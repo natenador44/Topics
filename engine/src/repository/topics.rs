@@ -1,13 +1,17 @@
+use crate::patch_field_schema;
 use crate::error::{RepoResult, TopicRepoError};
 use crate::models::Topic;
 use crate::repository::{IdentifiersRepository, SetsRepository};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use optional_field::Field;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 pub struct TopicUpdate {
-    pub name: Option<String>,
-    pub description: Option<String>,
+    #[schema(schema_with = patch_field_schema)]
+    pub name: Field<String>,
+    #[schema(schema_with = patch_field_schema)]
+    pub description: Field<String>,
 }
 
 pub trait ExistingTopicRepository {

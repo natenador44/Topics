@@ -22,6 +22,7 @@ tokio-stream = "0.1.17"
 itertools = { workspace = true }
 axum-extra = { workspace = true, features = ["query"]}
 chrono = { workspace = true, features = ["serde"] }
+optional-field = { workspace = true }
 
 [dev-dependencies]
 axum-test = "18.1.0"

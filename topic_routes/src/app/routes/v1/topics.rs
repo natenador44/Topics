@@ -1,3 +1,4 @@
+use engine::patch_field_schema;
 use std::fmt::Debug;
 
 use crate::app::routes::response::StreamingResponse;
@@ -15,13 +16,15 @@ use axum::{
     routing::{delete, get, post},
 };
 use chrono::{DateTime, Utc};
+use optional_field::{serde_optional_fields, Field};
 use engine::models::{Topic, TopicId};
 use engine::search_criteria::SearchFilter;
 use engine::search_filters::TopicFilter;
 use engine::{Engine, Pagination};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use tracing::{info, instrument};
-use utoipa::{OpenApi, ToSchema};
+use utoipa::{schema, OpenApi, PartialSchema, ToSchema};
+use utoipa::openapi::{Object, ObjectBuilder, RefOr, Schema};
 use utoipa_axum::router::OpenApiRouter;
 
 #[derive(OpenApi)]
@@ -34,11 +37,15 @@ pub struct TopicRequest {
     description: Option<String>,
 }
 
+#[serde_optional_fields]
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicPatchRequest {
-    name: Option<String>,
-    description: Option<String>,
+    #[schema(schema_with = patch_field_schema)]
+    name: Field<String>,
+    #[schema(schema_with = patch_field_schema)]
+    description: Field<String>,
 }
+
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicSearch {
