@@ -135,7 +135,7 @@ impl IntoResponse for TopicResponse {
     )
 )]
 // #[axum::debug_handler]
-#[instrument(skip_all, ret, err(Debug), fields(
+#[instrument(skip_all, err(Debug), fields(
     req.page = pagination.page,
     req.page_size = pagination.page_size,
     req.filter.name = search.name,
@@ -182,7 +182,7 @@ where
         ("topic_id" = TopicId, Path, description = "The TopicId to find"),
     )
 )]
-#[instrument(skip(service), ret, err(Debug))]
+#[instrument(skip(service), err(Debug))]
 pub async fn get_topic<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
@@ -206,7 +206,7 @@ where
     ),
     request_body = TopicRequest
 )]
-#[instrument(skip_all, ret, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
+#[instrument(skip_all, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
 async fn create_topic<T>(
     State(service): State<Service<T>>,
     Json(topic): Json<TopicRequest>,
@@ -229,7 +229,7 @@ where
         ("topic_id" = TopicId, Path, description = "The ID of the topic to delete to delete")
     )
 )]
-#[instrument(skip(service), ret, err(Debug))]
+#[instrument(skip(service), err(Debug))]
 pub async fn delete_topic<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
@@ -256,7 +256,7 @@ where
     ),
     request_body = TopicPatchRequest,
 )]
-#[instrument(skip(service), ret, err(Debug))]
+#[instrument(skip(service), err(Debug))]
 pub async fn patch_topic<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
