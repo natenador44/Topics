@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::connection::DbConnection;
 use engine::error::{RepoResult, SetRepoError, TopicRepoError};
 use engine::models::{Set, SetId, Topic, TopicId};
@@ -11,8 +9,9 @@ use engine::repository::{
 use engine::search_filters::{SetSearchCriteria, TopicFilter, TopicSearchCriteria};
 use error_stack::{Report, ResultExt};
 use optional_field::Field;
-use tokio_postgres::types::Type;
-use tokio_postgres::{Client, Config, NoTls, Row, Statement, connect};
+use tokio_postgres::types::ToSql;
+use tokio_postgres::{NoTls, Row, connect};
+use tokio_stream::StreamExt;
 use tracing::{debug, error};
 
 mod connection;
@@ -145,28 +144,40 @@ impl TopicsRepository for TopicRepo {
                 [TopicFilter::Name(name), TopicFilter::Description(desc)]
                 | [TopicFilter::Description(desc), TopicFilter::Name(name)],
             ) => client
-                .query(
+                .query_raw(
                     &statements.topics.name_desc_search,
-                    &[name, desc, &page, &page_size],
+                    slice_iter(&[name, desc, &page, &page_size]),
                 )
                 .await
                 .change_context(TopicRepoError::Search)?,
             Some([TopicFilter::Name(name)]) => client
-                .query(&statements.topics.name_search, &[name, &page, &page_size])
+                .query_raw(
+                    &statements.topics.name_search,
+                    slice_iter(&[name, &page, &page_size]),
+                )
                 .await
                 .change_context(TopicRepoError::Search)?,
             Some([TopicFilter::Description(desc)]) => client
-                .query(&statements.topics.desc_search, &[desc, &page, &page_size])
+                .query_raw(
+                    &statements.topics.desc_search,
+                    slice_iter(&[desc, &page, &page_size]),
+                )
                 .await
                 .change_context(TopicRepoError::Search)?,
             Some(_) => unreachable!("currently only two topic filters exist"),
             None => client
-                .query(&statements.topics.full_search, &[&page, &page_size])
+                .query_raw(
+                    &statements.topics.full_search,
+                    slice_iter(&[&page, &page_size]),
+                )
                 .await
                 .change_context(TopicRepoError::Search)?,
         };
 
-        Ok(result.into_iter().map(row_to_topic).collect())
+        result
+            .map(|r| r.map(row_to_topic).change_context(TopicRepoError::Search))
+            .collect()
+            .await
     }
 }
 
@@ -296,3 +307,9 @@ impl EntitiesRepository for EntityRepo {}
 pub struct IdentifierRepo; // TODO postgres pool
 
 impl IdentifiersRepository for IdentifierRepo {}
+
+fn slice_iter<'a>(
+    s: &'a [&'a (dyn ToSql + Sync)],
+) -> impl ExactSizeIterator<Item = &'a dyn ToSql> + 'a {
+    s.iter().map(|s| *s as _)
+}

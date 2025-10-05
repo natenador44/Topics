@@ -8,6 +8,7 @@ use engine::search_filters::{TopicFilter, TopicSearchCriteria};
 use engine::{Engine, Pagination};
 use error_stack::ResultExt;
 use optional_field::Field;
+use tracing::info;
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -20,19 +21,19 @@ impl<T: Engine> TopicService<T> {
         TopicService { engine }
     }
 
-    #[instrument(skip_all, ret(level = "debug"), name = "service#search")]
+    #[instrument(skip_all, name = "service#search")]
     pub async fn search(
         &self,
         search_criteria: TopicSearchCriteria,
     ) -> AppResult<Vec<Topic>, TopicServiceError> {
         let topic_repo = self.engine.topics();
-        let page = search_criteria.page();
-        let page_size = search_criteria.page_size();
 
         let topics = topic_repo
             .search(search_criteria)
             .await
             .change_context(TopicServiceError)?;
+
+        info!("found {} topics", topics.len());
 
         Ok(topics)
     }

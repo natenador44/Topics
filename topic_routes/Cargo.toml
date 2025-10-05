@@ -18,7 +18,7 @@ utoipa = { workspace = true, features = ["axum_extras", "uuid"] }
 utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 axum-streams = { version = "0.23.1", features = ["json"] }
-tokio-stream = "0.1.17"
+tokio-stream = { workspace = true }
 itertools = { workspace = true }
 axum-extra = { workspace = true, features = ["query"]}
 chrono = { workspace = true, features = ["serde"] }
