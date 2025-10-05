@@ -1,7 +1,7 @@
 use crate::repository::TopicsRepository;
 use std::fmt::Debug;
-use utoipa::openapi::{RefOr, Schema};
 use utoipa::PartialSchema;
+use utoipa::openapi::{RefOr, Schema};
 
 pub mod error;
 pub mod models;

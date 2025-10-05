@@ -2,7 +2,7 @@ use crate::{RepoInitErr, RepoInitResult};
 use error_stack::ResultExt;
 use std::sync::Arc;
 use tokio_postgres::types::Type;
-use tokio_postgres::{Client, Statement};
+use tokio_postgres::{Client, GenericClient, Statement};
 
 pub type PsqlClient = Arc<Client>;
 
@@ -48,6 +48,7 @@ pub struct TopicPreparedStatements {
     pub update_name_desc: Statement,
     pub update_name: Statement,
     pub update_desc: Statement,
+    pub delete: Statement,
 }
 
 impl TopicPreparedStatements {
@@ -99,6 +100,10 @@ impl TopicPreparedStatements {
             update_desc: client.prepare_typed(
                 "update topics set description = $1 where id = $2 returning id, name, description, created, updated",
                 &[Type::VARCHAR, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            delete: client.prepare_typed(
+                "delete from topics where id = $1",
+                &[Type::UUID],
             ).await.change_context(RepoInitErr)?,
         };
 

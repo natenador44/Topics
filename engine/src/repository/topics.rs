@@ -1,10 +1,10 @@
-use crate::patch_field_schema;
 use crate::error::{RepoResult, TopicRepoError};
 use crate::models::Topic;
+use crate::patch_field_schema;
 use crate::repository::{IdentifiersRepository, SetsRepository};
+use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use optional_field::Field;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 pub struct TopicUpdate {

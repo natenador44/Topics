@@ -16,15 +16,15 @@ use axum::{
     routing::{delete, get, post},
 };
 use chrono::{DateTime, Utc};
-use optional_field::{serde_optional_fields, Field};
 use engine::models::{Topic, TopicId};
 use engine::search_criteria::SearchFilter;
 use engine::search_filters::TopicFilter;
 use engine::{Engine, Pagination};
+use optional_field::{Field, serde_optional_fields};
 use serde::{Deserialize, Deserializer, Serialize};
 use tracing::{info, instrument};
-use utoipa::{schema, OpenApi, PartialSchema, ToSchema};
 use utoipa::openapi::{Object, ObjectBuilder, RefOr, Schema};
+use utoipa::{OpenApi, PartialSchema, ToSchema, schema};
 use utoipa_axum::router::OpenApiRouter;
 
 #[derive(OpenApi)]
@@ -45,7 +45,6 @@ pub struct TopicPatchRequest {
     #[schema(schema_with = patch_field_schema)]
     description: Field<String>,
 }
-
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicSearch {

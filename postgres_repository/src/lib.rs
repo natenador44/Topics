@@ -141,7 +141,10 @@ impl TopicsRepository for TopicRepo {
         let page_size = topic_search_criteria.page_size();
 
         let result = match topic_search_criteria.filters() {
-            Some([TopicFilter::Name(name), TopicFilter::Description(desc)]) => client
+            Some(
+                [TopicFilter::Name(name), TopicFilter::Description(desc)]
+                | [TopicFilter::Description(desc), TopicFilter::Name(name)],
+            ) => client
                 .query(
                     &statements.topics.name_desc_search,
                     &[name, desc, &page, &page_size],
@@ -185,29 +188,50 @@ impl ExistingTopicRepository for ExistingTopicRepo {
     }
 
     async fn delete(&self) -> RepoResult<(), TopicRepoError> {
-        todo!()
+        self.conn
+            .client
+            .execute(&self.conn.statements.topics.delete, &[&self.topic_id.0])
+            .await
+            .change_context(TopicRepoError::Delete)?;
+        Ok(())
     }
 
     async fn update(&self, topic: TopicUpdate) -> RepoResult<Topic, TopicRepoError> {
         let row = match (topic.name, topic.description) {
-            (Field::Present(n), Field::Present(d)) => self.conn
+            (Field::Present(n), Field::Present(d)) => self
+                .conn
                 .client
-                .query_one(&self.conn.statements.topics.update_name_desc, &[&n, &d, &self.topic_id.0])
+                .query_one(
+                    &self.conn.statements.topics.update_name_desc,
+                    &[&n, &d, &self.topic_id.0],
+                )
                 .await
                 .change_context(TopicRepoError::Update)?,
-            (Field::Present(n), Field::Missing) => {
-                self.conn.client
-                    .query_one(&self.conn.statements.topics.update_name, &[&n, &self.topic_id.0])
-                    .await
-                    .change_context(TopicRepoError::Update)?
-            },
-            (Field::Missing, Field::Present(d)) => self.conn.client
-                .query_one(&self.conn.statements.topics.update_desc, &[&d, &self.topic_id.0])
+            (Field::Present(n), Field::Missing) => self
+                .conn
+                .client
+                .query_one(
+                    &self.conn.statements.topics.update_name,
+                    &[&n, &self.topic_id.0],
+                )
+                .await
+                .change_context(TopicRepoError::Update)?,
+            (Field::Missing, Field::Present(d)) => self
+                .conn
+                .client
+                .query_one(
+                    &self.conn.statements.topics.update_desc,
+                    &[&d, &self.topic_id.0],
+                )
                 .await
                 .change_context(TopicRepoError::Update)?,
             _ => {
                 debug!("no changes requested, only reading topic");
-                self.conn.client.query_one(&self.conn.statements.topics.find, &[&self.topic_id.0]).await.change_context(TopicRepoError::Search)?
+                self.conn
+                    .client
+                    .query_one(&self.conn.statements.topics.find, &[&self.topic_id.0])
+                    .await
+                    .change_context(TopicRepoError::Search)?
             }
         };
 
