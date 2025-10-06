@@ -608,7 +608,7 @@ async fn update_returns_ok_and_updated_topic_if_no_error() {
     existing_topic_repo
         .expect_update()
         .with(predicate::eq(TopicUpdate {
-            name: Field::Present(Some(new_name.clone())),
+            name: Some(new_name.clone()),
             description: Field::Present(Some(new_desc.clone())),
         }))
         .return_once(return_scenario::update::success(updated_topic.clone()));

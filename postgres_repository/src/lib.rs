@@ -1,3 +1,4 @@
+use std::slice;
 use crate::connection::DbConnection;
 use engine::error::{RepoResult, SetRepoError, TopicRepoError};
 use engine::models::{Set, SetId, Topic, TopicId};
@@ -12,7 +13,7 @@ use optional_field::Field;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{NoTls, Row, connect};
 use tokio_stream::StreamExt;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 mod connection;
 mod migration;
@@ -76,10 +77,12 @@ fn row_to_topic(row: Row) -> Topic {
 impl TopicsRepository for TopicRepo {
     type ExistingTopic = ExistingTopicRepo;
 
+    #[instrument(skip_all, name = "repo#expect_existing")]
     async fn expect_existing(
         &self,
         topic_id: TopicId,
     ) -> RepoResult<Option<Self::ExistingTopic>, TopicRepoError> {
+        debug!("expecting topic to exist...");
         Ok(self
             .connection
             .client
@@ -92,7 +95,9 @@ impl TopicsRepository for TopicRepo {
             }))
     }
 
+    #[instrument(skip_all, name = "repo#find")]
     async fn find(&self, topic_id: TopicId) -> RepoResult<Option<Topic>, TopicRepoError> {
+        debug!("grabbing topic data");
         let result = self
             .connection
             .client
@@ -103,12 +108,14 @@ impl TopicsRepository for TopicRepo {
         Ok(result.map(row_to_topic))
     }
 
+    #[instrument(skip_all, name = "repo#create")]
     async fn create(
         &self,
         name: String,
         description: Option<String>,
     ) -> RepoResult<Topic, TopicRepoError> {
         let id = TopicId::new();
+        debug!("creating new topic with id {id}");
         let row = self
             .connection
             .client
@@ -130,14 +137,16 @@ impl TopicsRepository for TopicRepo {
         })
     }
 
+    #[instrument(skip_all, name = "repo#search")]
     async fn search(
         &self,
         topic_search_criteria: TopicSearchCriteria,
     ) -> RepoResult<Vec<Topic>, TopicRepoError> {
         let client = &self.connection.client;
         let statements = &self.connection.statements;
-        let page = topic_search_criteria.page().saturating_sub(1); // assuming users send '1' to specify the first page... we'll see if this sticks, not sure what standard is
+        let offset = topic_search_criteria.page().saturating_sub(1); // assuming users send '1' to specify the first page... we'll see if this sticks, not sure what standard is
         let page_size = topic_search_criteria.page_size();
+        debug!("user specified page: {}, actual offset: {offset}, page size: {page_size}, number of search filters: {}", topic_search_criteria.page(), topic_search_criteria.filters().map(|f| f.len()).unwrap_or(0));
 
         let result = match topic_search_criteria.filters() {
             Some(
@@ -146,21 +155,21 @@ impl TopicsRepository for TopicRepo {
             ) => client
                 .query_raw(
                     &statements.topics.name_desc_search,
-                    slice_iter(&[name, desc, &page, &page_size]),
+                    slice_iter(&[name, desc, &offset, &page_size]),
                 )
                 .await
                 .change_context(TopicRepoError::Search)?,
             Some([TopicFilter::Name(name)]) => client
                 .query_raw(
                     &statements.topics.name_search,
-                    slice_iter(&[name, &page, &page_size]),
+                    slice_iter(&[name, &offset, &page_size]),
                 )
                 .await
                 .change_context(TopicRepoError::Search)?,
             Some([TopicFilter::Description(desc)]) => client
                 .query_raw(
                     &statements.topics.desc_search,
-                    slice_iter(&[desc, &page, &page_size]),
+                    slice_iter(&[desc, &offset, &page_size]),
                 )
                 .await
                 .change_context(TopicRepoError::Search)?,
@@ -168,7 +177,7 @@ impl TopicsRepository for TopicRepo {
             None => client
                 .query_raw(
                     &statements.topics.full_search,
-                    slice_iter(&[&page, &page_size]),
+                    slice_iter(&[&offset, &page_size]),
                 )
                 .await
                 .change_context(TopicRepoError::Search)?,
@@ -198,6 +207,7 @@ impl ExistingTopicRepository for ExistingTopicRepo {
         todo!()
     }
 
+    #[instrument(skip_all, name = "repo#delete")]
     async fn delete(&self) -> RepoResult<(), TopicRepoError> {
         self.conn
             .client
@@ -207,9 +217,10 @@ impl ExistingTopicRepository for ExistingTopicRepo {
         Ok(())
     }
 
+    #[instrument(skip_all, name = "repo#update")]
     async fn update(&self, topic: TopicUpdate) -> RepoResult<Topic, TopicRepoError> {
         let row = match (topic.name, topic.description) {
-            (Field::Present(n), Field::Present(d)) => self
+            (Some(n), Field::Present(d)) => self
                 .conn
                 .client
                 .query_one(
@@ -218,7 +229,7 @@ impl ExistingTopicRepository for ExistingTopicRepo {
                 )
                 .await
                 .change_context(TopicRepoError::Update)?,
-            (Field::Present(n), Field::Missing) => self
+            (Some(n), Field::Missing) => self
                 .conn
                 .client
                 .query_one(
@@ -227,7 +238,7 @@ impl ExistingTopicRepository for ExistingTopicRepo {
                 )
                 .await
                 .change_context(TopicRepoError::Update)?,
-            (Field::Missing, Field::Present(d)) => self
+            (None, Field::Present(d)) => self
                 .conn
                 .client
                 .query_one(

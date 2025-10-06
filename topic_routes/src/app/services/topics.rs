@@ -8,7 +8,7 @@ use engine::search_filters::{TopicFilter, TopicSearchCriteria};
 use engine::{Engine, Pagination};
 use error_stack::ResultExt;
 use optional_field::Field;
-use tracing::info;
+use tracing::{debug, info};
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -26,6 +26,7 @@ impl<T: Engine> TopicService<T> {
         &self,
         search_criteria: TopicSearchCriteria,
     ) -> AppResult<Vec<Topic>, TopicServiceError> {
+        debug!("searching for topics..");
         let topic_repo = self.engine.topics();
 
         let topics = topic_repo
@@ -38,8 +39,9 @@ impl<T: Engine> TopicService<T> {
         Ok(topics)
     }
 
-    #[instrument(skip_all, ret(level = "debug"), name = "service#get_by_id")]
+    #[instrument(skip_all, name = "service#get_by_id")]
     pub async fn get(&self, topic_id: TopicId) -> AppResult<Option<Topic>, TopicServiceError> {
+        debug!("getting topic by id");
         let topic = self
             .engine
             .topics()
@@ -49,12 +51,13 @@ impl<T: Engine> TopicService<T> {
         Ok(topic)
     }
 
-    #[instrument(skip_all, ret(level = "debug"), name = "service#create")]
+    #[instrument(skip_all, name = "service#create")]
     pub async fn create(
         &self,
         name: String,
         description: Option<String>,
     ) -> AppResult<Topic, TopicServiceError> {
+        debug!("creating topic");
         self.engine
             .topics()
             .create(name, description)
@@ -62,8 +65,9 @@ impl<T: Engine> TopicService<T> {
             .change_context(TopicServiceError)
     }
 
-    #[instrument(skip_all, ret(level = "debug"), name = "service#delete")]
+    #[instrument(skip_all, name = "service#delete")]
     pub async fn delete(&self, topic_id: TopicId) -> AppResult<ResourceOutcome, TopicServiceError> {
+        debug!("deleting topic");
         let Some(topic) = self
             .engine
             .topics()
@@ -71,6 +75,7 @@ impl<T: Engine> TopicService<T> {
             .await
             .change_context(TopicServiceError)?
         else {
+            debug!("topic not found, cannot delete");
             return Ok(ResourceOutcome::NotFound);
         };
 
@@ -78,13 +83,14 @@ impl<T: Engine> TopicService<T> {
         Ok(ResourceOutcome::Found)
     }
 
-    #[instrument(skip_all, ret(level = "debug"), name = "service#update")]
+    #[instrument(skip_all, name = "service#update")]
     pub async fn update(
         &self,
         topic_id: TopicId,
-        name: Field<String>,
+        name: Option<String>,
         description: Field<String>,
     ) -> AppResult<Option<Topic>, TopicServiceError> {
+        debug!("updating topic");
         let Some(topic) = self
             .engine
             .topics()
@@ -92,6 +98,7 @@ impl<T: Engine> TopicService<T> {
             .await
             .change_context(TopicServiceError)?
         else {
+            debug!("topic not found, can't update");
             return Ok(None);
         };
 

@@ -40,8 +40,10 @@ pub struct TopicRequest {
 #[serde_optional_fields]
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct TopicPatchRequest {
-    #[schema(schema_with = patch_field_schema)]
-    name: Field<String>,
+    /// The new name of the topic. Cannot be null. If set to null or not specified, no update will happen.
+    name: Option<String>,
+    /// The new description of the topic. Can be null. If specified as null, the description will update to null.
+    /// If not specified, no update will happen.
     #[schema(schema_with = patch_field_schema)]
     description: Field<String>,
 }
@@ -256,7 +258,10 @@ where
     ),
     request_body = TopicPatchRequest,
 )]
-#[instrument(skip(service), err(Debug))]
+#[instrument(skip(service, topic), err(Debug), fields(
+    topic.name = topic.name,
+    topic.desc = topic.description.as_ref().map_present_or(None, |d| Some(d.map(String::as_str).unwrap_or("null"))),
+))]
 pub async fn patch_topic<T>(
     State(service): State<Service<T>>,
     Path(topic_id): Path<TopicId>,
