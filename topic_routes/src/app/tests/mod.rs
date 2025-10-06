@@ -114,6 +114,7 @@ impl SetsRepository for SetRepo {
     async fn create(
         &self,
         name: String,
+        description: Option<String>,
         initial_entity_payloads: Vec<Value>,
     ) -> RepoResult<Set, SetRepoError> {
         unreachable!()

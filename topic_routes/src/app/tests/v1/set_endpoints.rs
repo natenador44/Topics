@@ -592,6 +592,7 @@ mod return_scenario {
     use futures::FutureExt;
     use futures::future::BoxFuture;
     use serde_json::Value;
+    use chrono::Utc;
 
     type SetMockReturn<T> = RepoResult<T, SetRepoError>;
     type TopicMockReturn<'a, T> = BoxFuture<'a, AppResult<T, TopicRepoError>>;
@@ -659,17 +660,20 @@ mod return_scenario {
                 topic_id: TopicId,
                 set_id: SetId,
                 name: N,
-            ) -> impl FnOnce(String, Vec<Value>) -> SetMockReturn<Set> {
-                move |_, _| {
+            ) -> impl FnOnce(String, Option<String>, Vec<Value>) -> SetMockReturn<Set> {
+                move |_, _, _| {
                     Ok(Set {
                         id: set_id,
                         topic_id,
                         name: name.to_string(),
+                        description: None,
+                        created: Utc::now(),
+                        updated: None,
                     })
                 }
             }
 
-            pub fn error<'a>(_: String, _: Vec<Value>) -> SetMockReturn<Set> {
+            pub fn error<'a>(_: String, _: Option<String>, _: Vec<Value>) -> SetMockReturn<Set> {
                 Err(SetRepoError::Create.into_report())
             }
         }
@@ -687,6 +691,9 @@ mod return_scenario {
                         id: set_id,
                         topic_id,
                         name,
+                        description: None,
+                        created: Utc::now(),
+                        updated: None,            
                     }))
                 }
             }

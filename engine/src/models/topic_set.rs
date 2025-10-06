@@ -1,6 +1,7 @@
 use crate::models::TopicId;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use chrono::{DateTime, Utc};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -8,7 +9,7 @@ use uuid::Uuid;
 #[repr(transparent)]
 #[serde(transparent)]
 #[schema(as = uuid::Uuid)]
-pub struct SetId(Uuid);
+pub struct SetId(pub Uuid);
 impl SetId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
@@ -26,4 +27,7 @@ pub struct Set {
     pub id: SetId,
     pub topic_id: TopicId,
     pub name: String,
+    pub description: Option<String>,
+    pub created: DateTime<Utc>,
+    pub updated: Option<DateTime<Utc>>,
 }

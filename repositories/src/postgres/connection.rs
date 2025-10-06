@@ -2,7 +2,7 @@ use crate::{RepoInitErr, RepoInitResult};
 use error_stack::ResultExt;
 use std::sync::Arc;
 use tokio_postgres::types::Type;
-use tokio_postgres::{Client, Statement};
+use tokio_postgres::{Client, GenericClient, Statement};
 // TODO use `rstest`!
 
 pub type PsqlClient = Arc<Client>;
@@ -26,12 +26,14 @@ impl DbConnection {
 #[derive(Debug, Clone)]
 pub struct PreparedStatements {
     pub topics: TopicPreparedStatements,
+    pub sets: SetPreparedStatements,
 }
 
 impl PreparedStatements {
     async fn new(client: PsqlClient) -> RepoInitResult<Self> {
         Ok(Self {
-            topics: TopicPreparedStatements::new(client).await?,
+            topics: TopicPreparedStatements::new(client.clone()).await?,
+            sets: SetPreparedStatements::new(client).await?,
         })
     }
 }
@@ -109,5 +111,26 @@ impl TopicPreparedStatements {
         };
 
         Ok(this)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetPreparedStatements {
+    pub find: Statement,
+    pub create: Statement,
+}
+
+impl SetPreparedStatements {
+    async fn new(client: PsqlClient) -> RepoInitResult<Self> {
+        Ok(Self {
+            find: client.prepare_typed(
+                "select id, topic_id, name, description, created, updated from sets where id=$1",
+                &[Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            create: client.prepare_typed(
+                "insert into sets (id, topic_id, name, description) values ($1, $2, $3, $4) returning id, topic_id, name, description, created, updated",
+                &[Type::UUID, Type::UUID, Type::VARCHAR, Type::VARCHAR],
+            ).await.change_context(RepoInitErr)?,
+        })
     }
 }

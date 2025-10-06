@@ -50,6 +50,7 @@ pub trait SetsRepository {
     fn create(
         &self,
         name: String,
+        description: Option<String>,
         initial_entity_payloads: Vec<Value>,
     ) -> impl Future<Output = RepoResult<Set, SetRepoError>> + Send;
 

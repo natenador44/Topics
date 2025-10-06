@@ -20,6 +20,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
+use chrono::{DateTime, Utc};
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
@@ -40,6 +41,7 @@ pub struct ApiDoc;
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetRequest {
     name: String,
+    description: Option<String>,
     entities: Option<Vec<Value>>,
 }
 
@@ -74,28 +76,35 @@ struct SetResponse {
     id: SetId,
     topic_id: TopicId,
     name: String,
+    description: Option<String>,
+    created: DateTime<Utc>,
+    updated: Option<DateTime<Utc>>,
     entities_url: String,
+    topic_url: String,
 }
 
 impl SetResponse {
     fn ok(set: Set) -> Self {
-        Self {
-            status_code: StatusCode::OK,
-            id: set.id,
-            topic_id: set.topic_id,
-            name: set.name,
-            entities_url: format!("/api/v1/topics/{}/sets/{}/entities", set.topic_id, set.id),
-        }
+        Self::new(set, StatusCode::OK)
     }
 
     fn created(set: Set) -> Self {
+        Self::new(set, StatusCode::CREATED)
+    }
+
+    fn new(set: Set, status_code: StatusCode) -> Self {
         Self {
-            status_code: StatusCode::CREATED,
+            status_code,
             id: set.id,
             topic_id: set.topic_id,
             name: set.name,
+            description: set.description,
+            created: set.created,
+            updated: set.updated,
             entities_url: format!("/api/v1/topics/{}/sets/{}/entities", set.topic_id, set.id),
+            topic_url: format!("/api/v1/topics/{}", set.topic_id),
         }
+
     }
 }
 
@@ -103,13 +112,7 @@ impl IntoResponse for SetResponse {
     fn into_response(self) -> Response {
         (
             self.status_code,
-            Json(json!({
-                    "id": self.id,
-                    "topic_id": self.topic_id,
-                    "name": self.name,
-                    "entities_url": self.entities_url,
-                }
-            )),
+            Json(self),
         )
             .into_response()
     }
@@ -141,7 +144,7 @@ where
 {
     let new_set = service
         .sets
-        .create(topic_id, set_request.name, set_request.entities)
+        .create(topic_id, set_request.name, set_request.description, set_request.entities)
         .await?;
 
     match new_set {

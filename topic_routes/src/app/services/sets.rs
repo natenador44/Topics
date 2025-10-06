@@ -65,6 +65,7 @@ where
         &self,
         topic_id: TopicId,
         set_name: String,
+        description: Option<String>,
         initial_entity_payloads: Option<Vec<Value>>,
     ) -> AppResult<Option<Set>, SetServiceError> {
         let Some(topic) = self
@@ -82,7 +83,7 @@ where
 
         let new_set = topic
             .sets()
-            .create(set_name, initial_entity_payloads.unwrap_or_default())
+            .create(set_name, description, initial_entity_payloads.unwrap_or_default())
             .await
             .change_context(SetServiceError)?;
 

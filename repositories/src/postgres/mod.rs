@@ -2,7 +2,7 @@ use error_stack::{Report, ResultExt};
 use optional_field::Field;
 use tokio_postgres::{connect, NoTls, Row};
 use tokio_postgres::types::ToSql;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 use engine::error::{RepoResult, SetRepoError, TopicRepoError};
 use engine::models::{Set, SetId, Topic, TopicId};
 use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
@@ -192,7 +192,10 @@ impl ExistingTopicRepository for ExistingTopicRepo {
     type IdentifierRepo = IdentifierRepo;
 
     fn sets(&self) -> Self::SetRepo {
-        todo!()
+        SetRepo {
+            conn: self.conn.clone(),
+            topic_id: self.topic_id,
+        }
     }
 
     fn identifiers(&self) -> Self::IdentifierRepo {
@@ -253,7 +256,21 @@ impl ExistingTopicRepository for ExistingTopicRepo {
     }
 }
 
-pub struct SetRepo; // TODO postgres pool
+pub struct SetRepo {
+    conn: DbConnection,
+    topic_id: TopicId
+}
+
+fn row_to_set(row: Row) -> Set {
+    Set {
+        id: SetId(row.get("id")),
+        topic_id: TopicId(row.get("topic_id")),
+        name: row.get("name"),
+        description: row.get("description"),
+        created: row.get("created"),
+        updated: row.get("updated"),
+    }
+}
 
 impl SetsRepository for SetRepo {
     type ExistingSet = ExistingSetRepo;
@@ -266,15 +283,34 @@ impl SetsRepository for SetRepo {
     }
 
     async fn find(&self, set_id: SetId) -> RepoResult<Option<Set>, SetRepoError> {
-        todo!()
+        let row = self.conn
+            .client
+            .query_opt(&self.conn.statements.sets.find, &[&set_id.0])
+            .await
+            .change_context(SetRepoError::Get)?;
+        
+        Ok(row.map(row_to_set))
     }
 
     async fn create(
         &self,
         name: String,
+        description: Option<String>,
         initial_entity_payloads: Vec<serde_json::value::Value>,
     ) -> RepoResult<Set, SetRepoError> {
-        todo!()
+        let set_id = SetId::new();
+        
+        let row = self.conn
+            .client
+            .query_one(&self.conn.statements.sets.create, &[&set_id.0, &self.topic_id.0, &name, &description])
+            .await
+            .change_context(SetRepoError::Create)?;
+        
+        if !initial_entity_payloads.is_empty() {
+            warn!("initializing set with entities is not yet supported")
+        }
+        
+        Ok(row_to_set(row))
     }
 
     async fn search(
