@@ -4,7 +4,7 @@ use tokio_postgres::Client;
 
 mod embedded {
     use refinery::embed_migrations;
-    embed_migrations!("./src/migrations/");
+    embed_migrations!("./src/postgres/migrations/");
 }
 
 pub async fn run(client: &mut Client) -> RepoInitResult<()> {

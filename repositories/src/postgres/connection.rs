@@ -3,7 +3,6 @@ use error_stack::ResultExt;
 use std::sync::Arc;
 use tokio_postgres::types::Type;
 use tokio_postgres::{Client, Statement};
-
 // TODO use `rstest`!
 
 pub type PsqlClient = Arc<Client>;

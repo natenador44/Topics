@@ -1,6 +1,6 @@
 use dotenv::dotenv;
 use engine::Engine;
-use postgres_repository::{ConnectionDetails, TopicRepo};
+use repositories::postgres;
 use tokio::runtime::Handle;
 use topic_routes::AppProperties;
 use tracing::{debug, error};
@@ -8,17 +8,17 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 
 #[derive(Debug, Clone)]
 struct AppEngine {
-    repo: postgres_repository::TopicRepo,
+    repo: postgres::TopicRepo,
 }
 
 impl AppEngine {
-    fn new(repo: postgres_repository::TopicRepo) -> Self {
+    fn new(repo: postgres::TopicRepo) -> Self {
         Self { repo }
     }
 }
 
 impl Engine for AppEngine {
-    type Repo = postgres_repository::TopicRepo;
+    type Repo = postgres::TopicRepo;
 
     fn topics(&self) -> Self::Repo {
         self.repo.clone()
@@ -40,7 +40,7 @@ async fn main() {
     };
 }
 
-fn create_connection_details() -> ConnectionDetails {
+fn create_connection_details() -> postgres::ConnectionDetails {
     // let Ok(port) = std::env::var("POSTGRES_PORT")
     //     .map(|s| s.parse())
     //     .unwrap_or(Ok(5432))
@@ -64,11 +64,11 @@ fn create_connection_details() -> ConnectionDetails {
         std::process::exit(1);
     };
 
-    ConnectionDetails::Url(postgres_url)
+    postgres::ConnectionDetails::Url(postgres_url)
 }
 
-async fn init_repo(connection_details: ConnectionDetails) -> TopicRepo {
-    match postgres_repository::init(Handle::current(), connection_details).await {
+async fn init_repo(connection_details: postgres::ConnectionDetails) -> postgres::TopicRepo {
+    match postgres::init(Handle::current(), connection_details).await {
         Ok(r) => r,
         Err(e) => {
             error!("failed to initialize repository: {e:?}");

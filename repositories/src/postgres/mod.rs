@@ -1,19 +1,17 @@
-use std::slice;
-use crate::connection::DbConnection;
-use engine::error::{RepoResult, SetRepoError, TopicRepoError};
-use engine::models::{Set, SetId, Topic, TopicId};
-use engine::repository::sets::{ExistingSetRepository, SetUpdate};
-use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
-use engine::repository::{
-    EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository,
-};
-use engine::search_filters::{SetSearchCriteria, TopicFilter, TopicSearchCriteria};
 use error_stack::{Report, ResultExt};
 use optional_field::Field;
+use tokio_postgres::{connect, NoTls, Row};
 use tokio_postgres::types::ToSql;
-use tokio_postgres::{NoTls, Row, connect};
-use tokio_stream::StreamExt;
 use tracing::{debug, error, instrument};
+use engine::error::{RepoResult, SetRepoError, TopicRepoError};
+use engine::models::{Set, SetId, Topic, TopicId};
+use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
+use engine::repository::{EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository};
+use engine::repository::sets::{ExistingSetRepository, SetUpdate};
+use engine::search_filters::{SetSearchCriteria, TopicFilter, TopicSearchCriteria};
+use connection::DbConnection;
+use crate::{RepoInitErr, RepoInitResult};
+use tokio_stream::StreamExt;
 
 mod connection;
 mod migration;
@@ -28,12 +26,6 @@ pub enum ConnectionDetails {
         host: String,
     },
 }
-
-pub type RepoInitResult<T> = Result<T, Report<RepoInitErr>>;
-
-#[derive(Debug, thiserror::Error)]
-#[error("failed to initialize postgres repository")]
-pub struct RepoInitErr;
 
 pub async fn init(
     runtime: tokio::runtime::Handle,
