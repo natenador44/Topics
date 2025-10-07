@@ -27,13 +27,15 @@ impl DbConnection {
 pub struct PreparedStatements {
     pub topics: TopicPreparedStatements,
     pub sets: SetPreparedStatements,
+    pub entities: EntityPreparedStatements,
 }
 
 impl PreparedStatements {
     async fn new(client: PsqlClient) -> RepoInitResult<Self> {
         Ok(Self {
             topics: TopicPreparedStatements::new(client.clone()).await?,
-            sets: SetPreparedStatements::new(client).await?,
+            sets: SetPreparedStatements::new(client.clone()).await?,
+            entities: EntityPreparedStatements::new(client).await?,
         })
     }
 }
@@ -130,6 +132,21 @@ impl SetPreparedStatements {
             create: client.prepare_typed(
                 "insert into sets (id, topic_id, name, description) values ($1, $2, $3, $4) returning id, topic_id, name, description, created, updated",
                 &[Type::UUID, Type::UUID, Type::VARCHAR, Type::VARCHAR],
+            ).await.change_context(RepoInitErr)?,
+        })
+    }
+}
+#[derive(Debug, Clone)]
+pub struct EntityPreparedStatements {
+    pub create: Statement,
+}
+
+impl EntityPreparedStatements {
+    async fn new(client: PsqlClient) -> RepoInitResult<Self> {
+        Ok(Self {
+            create: client.prepare_typed(
+                "insert into entities (id, set_id, payload) values ($1, $2, $3) returning id, set_id, payload, created, updated",
+                &[Type::UUID, Type::UUID, Type::JSONB],
             ).await.change_context(RepoInitErr)?,
         })
     }

@@ -1,10 +1,11 @@
-use error_stack::{Report, ResultExt};
+use error_stack::{FutureExt, IntoReport, Report, ResultExt};
 use optional_field::Field;
+use tokio::task::JoinSet;
 use tokio_postgres::{connect, NoTls, Row};
 use tokio_postgres::types::ToSql;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use engine::error::{RepoResult, SetRepoError, TopicRepoError};
-use engine::models::{Set, SetId, Topic, TopicId};
+use engine::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
 use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
 use engine::repository::{EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository};
 use engine::repository::sets::{ExistingSetRepository, SetUpdate};
@@ -272,6 +273,17 @@ fn row_to_set(row: Row) -> Set {
     }
 }
 
+fn row_to_entity(row: Row) -> Entity {
+    Entity {
+        id: EntityId(row.get("id")),
+        set_id: SetId(row.get("set_id")),
+        applied_identifiers: Vec::new(), // not implemented yet
+        payload: row.get("payload"),
+        created: row.get("created"),
+        updated: row.get("updated"),
+    }
+}
+
 impl SetsRepository for SetRepo {
     type ExistingSet = ExistingSetRepo;
 
@@ -288,7 +300,7 @@ impl SetsRepository for SetRepo {
             .query_opt(&self.conn.statements.sets.find, &[&set_id.0])
             .await
             .change_context(SetRepoError::Get)?;
-        
+
         Ok(row.map(row_to_set))
     }
 
@@ -298,18 +310,42 @@ impl SetsRepository for SetRepo {
         description: Option<String>,
         initial_entity_payloads: Vec<serde_json::value::Value>,
     ) -> RepoResult<Set, SetRepoError> {
+        let client = &self.conn.client;
+        let statements = &self.conn.statements;
         let set_id = SetId::new();
-        
-        let row = self.conn
-            .client
-            .query_one(&self.conn.statements.sets.create, &[&set_id.0, &self.topic_id.0, &name, &description])
+
+        let row = client
+            .query_one(&statements.sets.create, &[&set_id.0, &self.topic_id.0, &name, &description])
             .await
             .change_context(SetRepoError::Create)?;
-        
+
         if !initial_entity_payloads.is_empty() {
-            warn!("initializing set with entities is not yet supported")
+            let mut futs = initial_entity_payloads
+                .into_iter()
+                .map(|p| {
+                    let entity_id = EntityId::new();
+                    let stmt = statements.entities.create.clone();
+                    let client = client.clone();
+                    async move {
+                        client.query_one(&stmt, &[&entity_id.0, &set_id.0, &p]).await
+                            .map(row_to_entity)
+                    }
+                }).collect::<JoinSet<_>>();
+
+            while let Some(entity) = futs.join_next().await {
+                let entity = match entity {
+                    Ok(entity) => entity.change_context(SetRepoError::Create)?,
+                    Err(e) => {
+                        warn!("failed to join on entity creation futures: {:?}", e.into_report());
+                        continue;
+                    }
+                };
+                
+                info!("successfully created entity: {}", entity.id);
+            }
+
         }
-        
+
         Ok(row_to_set(row))
     }
 

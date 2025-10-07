@@ -1,7 +1,8 @@
-use crate::models::IdentifierId;
+use crate::models::{IdentifierId, SetId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt::{Display, Formatter};
+use chrono::{DateTime, Utc};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -9,7 +10,7 @@ use uuid::Uuid;
 #[repr(transparent)]
 #[serde(transparent)]
 #[schema(as = uuid::Uuid)]
-pub struct EntityId(Uuid);
+pub struct EntityId(pub Uuid);
 impl EntityId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
@@ -27,6 +28,9 @@ impl Display for EntityId {
 /// Each topic can have multiple sets, and each set can have multiple entities.
 pub struct Entity {
     pub id: EntityId,
+    pub set_id: SetId,
     pub applied_identifiers: Vec<IdentifierId>, // TODO better way to store/identify these
     pub payload: Value,                         // this will be different later
+    pub created: DateTime<Utc>,
+    pub updated: Option<DateTime<Utc>>,
 }
