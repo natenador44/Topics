@@ -120,11 +120,21 @@ impl TopicPreparedStatements {
 pub struct SetPreparedStatements {
     pub find: Statement,
     pub create: Statement,
+    pub exists: Statement,
+    pub delete: Statement,
+    pub update_name_desc: Statement,
+    pub update_name: Statement,
+    pub update_desc: Statement,
+    pub full_search: Statement,
 }
 
 impl SetPreparedStatements {
     async fn new(client: PsqlClient) -> RepoInitResult<Self> {
         Ok(Self {
+            exists: client.prepare_typed(
+                "select 1 from sets where id = $1",
+                &[Type::UUID],
+            ).await.change_context(RepoInitErr)?,
             find: client.prepare_typed(
                 "select id, topic_id, name, description, created, updated from sets where id=$1",
                 &[Type::UUID],
@@ -133,12 +143,38 @@ impl SetPreparedStatements {
                 "insert into sets (id, topic_id, name, description) values ($1, $2, $3, $4) returning id, topic_id, name, description, created, updated",
                 &[Type::UUID, Type::UUID, Type::VARCHAR, Type::VARCHAR],
             ).await.change_context(RepoInitErr)?,
+            delete: client.prepare_typed(
+                "delete from sets where id = $1",
+                &[Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            update_name_desc: client.prepare_typed(
+                "update sets set name = $1, description = $2 where id = $3",
+                &[Type::VARCHAR, Type::VARCHAR, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            update_name: client.prepare_typed(
+                "update sets set name = $1 where id = $2",
+                &[Type::VARCHAR, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            update_desc: client.prepare_typed(
+                "update sets set description = $1 where id = $2",
+                &[Type::VARCHAR, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            full_search: client.prepare_typed(
+                "select id, topic_id, name, description, created, updated from sets offset $1 limit $2",
+                &[Type::OID, Type::OID],
+            ).await.change_context(RepoInitErr)?,
         })
     }
 }
 #[derive(Debug, Clone)]
 pub struct EntityPreparedStatements {
     pub create: Statement,
+    pub find: Statement,
+    pub exists: Statement,
+    pub full_search: Statement,
+    pub delete_all_in_set: Statement,
+    pub delete: Statement,
+    pub update_payload: Statement,
 }
 
 impl EntityPreparedStatements {
@@ -147,6 +183,30 @@ impl EntityPreparedStatements {
             create: client.prepare_typed(
                 "insert into entities (id, set_id, payload) values ($1, $2, $3) returning id, set_id, payload, created, updated",
                 &[Type::UUID, Type::UUID, Type::JSONB],
+            ).await.change_context(RepoInitErr)?,
+            find: client.prepare_typed(
+                "select id, set_id, payload, created, updated from entities where id = $1 and set_id = $2",
+                &[Type::UUID, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            exists: client
+                .prepare_typed("select 1 from entities where id = $1 and set_id = $2", &[Type::UUID, Type::UUID])
+                .await
+                .change_context(RepoInitErr)?,
+            full_search: client.prepare_typed(
+                "select id, set_id, payload, created, updated from entities where set_id = $1 offset $2 limit $3",
+                &[Type::UUID, Type::OID, Type::OID],
+            ).await.change_context(RepoInitErr)?,
+            delete_all_in_set: client.prepare_typed(
+                "delete from entities where set_id = $1",
+                &[Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            delete: client.prepare_typed(
+                "delete from entities where id = $1 and set_id = $2",
+                &[Type::UUID, Type::UUID],
+            ).await.change_context(RepoInitErr)?,
+            update_payload: client.prepare_typed(
+                "update entities set payload = $1 where id = $2 and set_id = $3",
+                &[Type::JSONB, Type::UUID, Type::UUID],
             ).await.change_context(RepoInitErr)?,
         })
     }

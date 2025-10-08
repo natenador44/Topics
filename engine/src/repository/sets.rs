@@ -1,11 +1,14 @@
 use crate::error::{RepoResult, SetRepoError};
 use crate::models::Set;
 use crate::repository::EntitiesRepository;
+use optional_field::Field;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct SetUpdate {}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SetUpdate {
+    pub name: Option<String>,
+    pub description: Field<String>,
+}
 
 pub trait ExistingSetRepository {
     type EntitiesRepo: EntitiesRepository + Send + Sync + 'static;

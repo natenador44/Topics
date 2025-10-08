@@ -8,8 +8,8 @@ use engine::search_filters::{TopicFilter, TopicSearchCriteria};
 use engine::{Engine, Pagination};
 use error_stack::ResultExt;
 use optional_field::Field;
-use tracing::{debug, info};
 use tracing::instrument;
+use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct TopicService<T> {

@@ -48,3 +48,7 @@ pub struct TopicServiceError;
 #[derive(Debug, thiserror::Error)]
 #[error("set service failed")]
 pub struct SetServiceError;
+
+#[derive(Debug, thiserror::Error)]
+#[error("entity service failed")]
+pub struct EntityServiceError;

@@ -28,4 +28,26 @@ pub enum SetRepoError {
     Delete,
     #[error("failed to search sets")]
     Search,
+    #[error("failed to check if set exists")]
+    Exists,
+    #[error("failed to update set")]
+    Update,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum EntityRepoError {
+    #[error("failed to create entity")]
+    Create,
+    #[error("failed to get entity")]
+    Get,
+    #[error("failed to delete entity")]
+    Delete,
+    #[error("failed to search entities")]
+    Search,
+    #[error("failed to check if entity exists")]
+    Exists,
+    #[error("failed to delete all entities in set")]
+    DeleteAllInSet,
+    #[error("failed to update entity")]
+    Update,
 }

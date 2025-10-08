@@ -1,5 +1,6 @@
 use crate::app::routes::response::StreamingResponse;
 use crate::app::services::ResourceOutcome;
+use crate::error::EntityServiceError;
 use crate::{
     app::{services::Service, state::AppState},
     error::{ServiceError, SetServiceError},
@@ -12,20 +13,25 @@ use axum::{
     routing::{delete, get, patch, post, put},
 };
 use axum_extra::extract::Query;
+use chrono::{DateTime, Utc};
 use engine::models::{Entity, EntityId, IdentifierId, Set, SetId, TopicId};
 use engine::search_criteria::SearchFilter;
-use engine::search_filters::SetFilter;
+use engine::search_filters::{EntitySearchCriteria, SetFilter};
 use engine::{Engine, Pagination};
+use error_stack::ResultExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Debug;
-use chrono::{DateTime, Utc};
 use tracing::{Level, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 const DEFAULT_SET_PAGE_SIZE: u32 = 10;
+const DEFAULT_ENTITY_PAGE_SIZE: u32 = 10;
+
+const MISSING_RESOURCE_RESPONSE_BODY: &str =
+    "The requested topic and/or set resource does not exist";
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -104,17 +110,12 @@ impl SetResponse {
             entities_url: format!("/api/v1/topics/{}/sets/{}/entities", set.topic_id, set.id),
             topic_url: format!("/api/v1/topics/{}", set.topic_id),
         }
-
     }
 }
 
 impl IntoResponse for SetResponse {
     fn into_response(self) -> Response {
-        (
-            self.status_code,
-            Json(self),
-        )
-            .into_response()
+        (self.status_code, Json(self)).into_response()
     }
 }
 
@@ -144,14 +145,15 @@ where
 {
     let new_set = service
         .sets
-        .create(topic_id, set_request.name, set_request.description, set_request.entities)
+        .create(
+            topic_id,
+            set_request.name,
+            set_request.description,
+            set_request.entities,
+        )
         .await?;
 
-    match new_set {
-        Some(new_set) => Ok(SetResponse::created(new_set).into_response()),
-        // TODO find a way to have ? automatically return a 404 response if this is true
-        None => Ok(StatusCode::NOT_FOUND.into_response()),
-    }
+    Ok(option_to_response(new_set.map(SetResponse::created)))
 }
 
 #[utoipa::path(
@@ -177,9 +179,7 @@ where
 {
     let set = service.sets.get(topic_id, set_id).await?;
 
-    Ok(set
-        .map(|s| SetResponse::ok(s).into_response())
-        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
+    Ok(option_to_response(set.map(SetResponse::ok)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -245,7 +245,7 @@ where
     }
 
     let Some(sets) = service.sets.search(topic_id, search_criteria).await? else {
-        return Ok(StatusCode::NOT_FOUND.into_response());
+        return Ok((StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response());
     };
 
     if sets.is_empty() {
@@ -284,12 +284,21 @@ async fn search_entities_in_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, SetId)>,
     // Query(search): Query<EntitySearch>,
-    Query(Pagination { page, page_size }): Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> Result<Response, ServiceError<SetServiceError>>
+// EntityServiceError?
 where
     T: Engine + Debug,
 {
-    todo!()
+    let search_criteria = EntitySearchCriteria::new(pagination, DEFAULT_ENTITY_PAGE_SIZE);
+
+    let entities = service
+        .entities
+        .search(topic_id, set_id, search_criteria)
+        .await
+        .change_context(SetServiceError)?;
+
+    Ok(option_to_response(entities))
 }
 
 #[utoipa::path(
@@ -312,7 +321,13 @@ async fn get_entity_in_set<T>(
 where
     T: Engine + Debug,
 {
-    todo!()
+    let entity = service
+        .entities
+        .get(topic_id, set_id, entity_id)
+        .await
+        .change_context(SetServiceError)?;
+
+    Ok(option_to_response(entity))
 }
 
 #[instrument(level=Level::DEBUG)]
@@ -332,11 +347,22 @@ where
 async fn add_entity_to_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, SetId)>,
-) -> Result<Response, ServiceError<SetServiceError>>
+    Json(payload): Json<Value>,
+) -> Result<Response, ServiceError<EntityServiceError>>
 where
     T: Engine + Debug,
 {
-    todo!()
+    let entity = service
+        .entities
+        .create_in_set(topic_id, set_id, payload)
+        .await?;
+
+    Ok(option_to_response(entity))
+}
+
+fn option_to_response<T: Serialize>(body: Option<T>) -> Response {
+    body.map(|b| Json(b).into_response())
+        .unwrap_or_else(|| (StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response())
 }
 
 #[utoipa::path(
@@ -355,13 +381,15 @@ where
 async fn delete_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id)): Path<(TopicId, SetId)>,
-) -> Result<StatusCode, ServiceError<SetServiceError>>
+) -> Result<Response, ServiceError<SetServiceError>>
 where
     T: Engine + Debug,
 {
     match service.sets.delete(topic_id, set_id).await? {
-        ResourceOutcome::Found => Ok(StatusCode::NO_CONTENT),
-        ResourceOutcome::NotFound => Ok(StatusCode::NOT_FOUND),
+        ResourceOutcome::Found => Ok(StatusCode::NO_CONTENT.into_response()),
+        ResourceOutcome::NotFound => {
+            Ok((StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response())
+        }
     }
 }
 
@@ -382,9 +410,21 @@ where
 async fn delete_entity_in_set<T>(
     State(service): State<Service<T>>,
     Path((topic_id, set_id, entity_id)): Path<(TopicId, SetId, EntityId)>,
-) -> Result<StatusCode, ServiceError<SetServiceError>>
+) -> Result<Response, ServiceError<EntityServiceError>>
 where
     T: Engine + Debug,
 {
-    todo!()
+    let result = service
+        .entities
+        .remove_from_set(topic_id, set_id, entity_id)
+        .await?;
+
+    let res = match result {
+        ResourceOutcome::Found => StatusCode::NO_CONTENT.into_response(),
+        ResourceOutcome::NotFound => {
+            (StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response()
+        }
+    };
+
+    Ok(res)
 }

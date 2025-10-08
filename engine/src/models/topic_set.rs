@@ -1,7 +1,7 @@
 use crate::models::TopicId;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use chrono::{DateTime, Utc};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

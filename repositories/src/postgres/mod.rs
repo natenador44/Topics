@@ -1,18 +1,26 @@
+use crate::postgres::connection::PsqlClient;
+use crate::{RepoInitErr, RepoInitResult};
+use connection::DbConnection;
+use engine::error::{EntityRepoError, RepoResult, SetRepoError, TopicRepoError};
+use engine::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
+use engine::repository::entities::{EntityUpdate, ExistingEntityRepository};
+use engine::repository::sets::{ExistingSetRepository, SetUpdate};
+use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
+use engine::repository::{
+    EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository,
+};
+use engine::search_criteria::SearchCriteria;
+use engine::search_filters::{
+    EntitySearchCriteria, SetSearchCriteria, TopicFilter, TopicSearchCriteria,
+};
 use error_stack::{FutureExt, IntoReport, Report, ResultExt};
 use optional_field::Field;
+use serde_json::Value;
 use tokio::task::JoinSet;
-use tokio_postgres::{connect, NoTls, Row};
 use tokio_postgres::types::ToSql;
-use tracing::{debug, error, info, instrument, warn};
-use engine::error::{RepoResult, SetRepoError, TopicRepoError};
-use engine::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
-use engine::repository::topics::{ExistingTopicRepository, TopicUpdate};
-use engine::repository::{EntitiesRepository, IdentifiersRepository, SetsRepository, TopicsRepository};
-use engine::repository::sets::{ExistingSetRepository, SetUpdate};
-use engine::search_filters::{SetSearchCriteria, TopicFilter, TopicSearchCriteria};
-use connection::DbConnection;
-use crate::{RepoInitErr, RepoInitResult};
+use tokio_postgres::{GenericClient, NoTls, Row, Statement, connect};
 use tokio_stream::StreamExt;
+use tracing::{debug, error, info, instrument, warn};
 
 mod connection;
 mod migration;
@@ -139,7 +147,14 @@ impl TopicsRepository for TopicRepo {
         let statements = &self.connection.statements;
         let offset = topic_search_criteria.page().saturating_sub(1); // assuming users send '1' to specify the first page... we'll see if this sticks, not sure what standard is
         let page_size = topic_search_criteria.page_size();
-        debug!("user specified page: {}, actual offset: {offset}, page size: {page_size}, number of search filters: {}", topic_search_criteria.page(), topic_search_criteria.filters().map(|f| f.len()).unwrap_or(0));
+        debug!(
+            "user specified page: {}, actual offset: {offset}, page size: {page_size}, number of search filters: {}",
+            topic_search_criteria.page(),
+            topic_search_criteria
+                .filters()
+                .map(|f| f.len())
+                .unwrap_or(0)
+        );
 
         let result = match topic_search_criteria.filters() {
             Some(
@@ -259,7 +274,7 @@ impl ExistingTopicRepository for ExistingTopicRepo {
 
 pub struct SetRepo {
     conn: DbConnection,
-    topic_id: TopicId
+    topic_id: TopicId,
 }
 
 fn row_to_set(row: Row) -> Set {
@@ -289,13 +304,25 @@ impl SetsRepository for SetRepo {
 
     async fn expect_existing(
         &self,
-        set: SetId,
+        set_id: SetId,
     ) -> RepoResult<Option<Self::ExistingSet>, SetRepoError> {
-        todo!()
+        debug!("expecting entity to exist...");
+        Ok(self
+            .conn
+            .client
+            .query_opt(&self.conn.statements.sets.exists, &[&set_id.0])
+            .await
+            .change_context(SetRepoError::Exists)?
+            .map(|_| ExistingSetRepo {
+                conn: self.conn.clone(),
+                topic_id: self.topic_id,
+                set_id,
+            }))
     }
 
     async fn find(&self, set_id: SetId) -> RepoResult<Option<Set>, SetRepoError> {
-        let row = self.conn
+        let row = self
+            .conn
             .client
             .query_opt(&self.conn.statements.sets.find, &[&set_id.0])
             .await
@@ -308,42 +335,30 @@ impl SetsRepository for SetRepo {
         &self,
         name: String,
         description: Option<String>,
-        initial_entity_payloads: Vec<serde_json::value::Value>,
+        initial_entity_payloads: Vec<Value>,
     ) -> RepoResult<Set, SetRepoError> {
         let client = &self.conn.client;
         let statements = &self.conn.statements;
         let set_id = SetId::new();
 
         let row = client
-            .query_one(&statements.sets.create, &[&set_id.0, &self.topic_id.0, &name, &description])
+            .query_one(
+                &statements.sets.create,
+                &[&set_id.0, &self.topic_id.0, &name, &description],
+            )
             .await
             .change_context(SetRepoError::Create)?;
 
         if !initial_entity_payloads.is_empty() {
-            let mut futs = initial_entity_payloads
-                .into_iter()
-                .map(|p| {
-                    let entity_id = EntityId::new();
-                    let stmt = statements.entities.create.clone();
-                    let client = client.clone();
-                    async move {
-                        client.query_one(&stmt, &[&entity_id.0, &set_id.0, &p]).await
-                            .map(row_to_entity)
-                    }
-                }).collect::<JoinSet<_>>();
-
-            while let Some(entity) = futs.join_next().await {
-                let entity = match entity {
-                    Ok(entity) => entity.change_context(SetRepoError::Create)?,
-                    Err(e) => {
-                        warn!("failed to join on entity creation futures: {:?}", e.into_report());
-                        continue;
-                    }
-                };
-                
-                info!("successfully created entity: {}", entity.id);
-            }
-
+            process_entities(
+                initial_entity_payloads,
+                EntityRepo {
+                    conn: self.conn.clone(),
+                    topic_id: self.topic_id,
+                    set_id,
+                },
+            )
+            .await?;
         }
 
         Ok(row_to_set(row))
@@ -351,33 +366,299 @@ impl SetsRepository for SetRepo {
 
     async fn search(
         &self,
-        set_search_criteria: SetSearchCriteria,
+        search_criteria: SetSearchCriteria,
     ) -> RepoResult<Vec<Set>, SetRepoError> {
-        todo!()
+        // TODO actual search criteria
+        let offset = search_criteria.page().saturating_sub(1); // assuming users send '1' to specify the first page... we'll see if this sticks, not sure what standard is
+        let page_size = search_criteria.page_size();
+        debug!(
+            "user specified page: {}, actual offset: {offset}, page size: {page_size}, number of search filters: {}",
+            search_criteria.page(),
+            search_criteria.filters().map(|f| f.len()).unwrap_or(0)
+        );
+
+        let result = self
+            .conn
+            .client
+            .query_raw(
+                &self.conn.statements.sets.full_search,
+                slice_iter(&[&offset, &page_size]),
+            )
+            .await
+            .change_context(SetRepoError::Search)?;
+
+        result
+            .map(|r| r.map(row_to_set).change_context(SetRepoError::Search))
+            .collect()
+            .await
     }
 }
 
-pub struct ExistingSetRepo; // TODO postgres pool
+async fn process_entities(
+    payloads: Vec<Value>,
+    entity_repo: EntityRepo,
+) -> RepoResult<(), SetRepoError> {
+    let mut futs = payloads
+        .into_iter()
+        .map(|p| {
+            let repo = entity_repo.clone();
+            async move { repo.create(p).await }
+        })
+        .collect::<JoinSet<_>>();
+
+    while let Some(entity) = futs.join_next().await {
+        let entity = match entity {
+            Ok(entity) => entity.change_context(SetRepoError::Create)?,
+            Err(e) => {
+                warn!(
+                    "failed to join on entity creation futures: {:?}",
+                    e.into_report()
+                );
+                continue;
+            }
+        };
+
+        info!("successfully created entity: {}", entity.id);
+    }
+
+    Ok(())
+}
+
+pub struct ExistingSetRepo {
+    conn: DbConnection,
+    topic_id: TopicId,
+    set_id: SetId,
+}
 
 impl ExistingSetRepository for ExistingSetRepo {
     type EntitiesRepo = EntityRepo;
 
     fn entities(&self) -> Self::EntitiesRepo {
-        todo!()
+        EntityRepo {
+            conn: self.conn.clone(),
+            topic_id: self.topic_id,
+            set_id: self.set_id,
+        }
     }
 
     async fn delete(&self) -> RepoResult<(), SetRepoError> {
-        todo!()
+        // delete all entities in the set first
+        // then delete the set
+        // eventually we'll have a 'soft delete' option since this is so destructive
+        self.entities()
+            .delete_all_in_set()
+            .await
+            .change_context(SetRepoError::Delete)?;
+
+        let delete_count = self
+            .conn
+            .client
+            .execute(&self.conn.statements.sets.delete, &[&self.set_id.0])
+            .await
+            .change_context(SetRepoError::Delete)?;
+
+        info!("deleted {} sets", delete_count);
+        Ok(())
     }
 
     async fn update(&self, set: SetUpdate) -> RepoResult<Set, SetRepoError> {
-        todo!()
+        match (set.name, set.description) {
+            (Some(n), Field::Present(Some(d))) => self
+                .conn
+                .client
+                .query_one(
+                    &self.conn.statements.sets.update_name_desc,
+                    &[&n, &d, &self.set_id.0],
+                )
+                .await
+                .change_context(SetRepoError::Update)
+                .map(row_to_set),
+            (Some(n), _) => self
+                .conn
+                .client
+                .query_one(
+                    &self.conn.statements.sets.update_name,
+                    &[&n, &self.set_id.0],
+                )
+                .await
+                .change_context(SetRepoError::Update)
+                .map(row_to_set),
+            (_, Field::Present(Some(d))) => self
+                .conn
+                .client
+                .query_one(
+                    &self.conn.statements.sets.update_desc,
+                    &[&d, &self.set_id.0],
+                )
+                .await
+                .change_context(SetRepoError::Update)
+                .map(row_to_set),
+            _ => {
+                info!("no update properties specified, just getting set as is");
+                self.conn
+                    .client
+                    .query_one(&self.conn.statements.sets.find, &[&self.set_id.0])
+                    .await
+                    .change_context(SetRepoError::Update)
+                    .map(row_to_set)
+            }
+        }
     }
 }
 
-pub struct EntityRepo; // TODO postgres pool
+#[derive(Clone)]
+pub struct EntityRepo {
+    conn: DbConnection,
+    topic_id: TopicId,
+    set_id: SetId,
+}
 
-impl EntitiesRepository for EntityRepo {}
+impl EntitiesRepository for EntityRepo {
+    type ExistingEntityRepo = ExistingEntityRepo;
+
+    async fn expect_existing(
+        &self,
+        entity_id: EntityId,
+    ) -> RepoResult<Option<Self::ExistingEntityRepo>, EntityRepoError> {
+        debug!("expecting entity to exist...");
+        Ok(self
+            .conn
+            .client
+            .query_opt(
+                &self.conn.statements.entities.exists,
+                &[&entity_id.0, &self.set_id.0],
+            )
+            .await
+            .change_context(EntityRepoError::Exists)?
+            .map(|_| ExistingEntityRepo {
+                conn: self.conn.clone(),
+                topic_id: self.topic_id,
+                set_id: self.set_id,
+                entity_id,
+            }))
+    }
+
+    async fn search(
+        &self,
+        search_criteria: EntitySearchCriteria,
+    ) -> RepoResult<Vec<Entity>, EntityRepoError> {
+        // TODO actual search criteria
+        let offset = search_criteria.page().saturating_sub(1); // assuming users send '1' to specify the first page... we'll see if this sticks, not sure what standard is
+        let page_size = search_criteria.page_size();
+        debug!(
+            "user specified page: {}, actual offset: {offset}, page size: {page_size}, number of search filters: {}",
+            search_criteria.page(),
+            search_criteria.filters().map(|f| f.len()).unwrap_or(0)
+        );
+
+        let result = self
+            .conn
+            .client
+            .query_raw(
+                &self.conn.statements.entities.full_search,
+                slice_iter(&[&self.set_id.0, &offset, &page_size]),
+            )
+            .await
+            .change_context(EntityRepoError::Search)?;
+
+        result
+            .map(|r| r.map(row_to_entity).change_context(EntityRepoError::Search))
+            .collect()
+            .await
+    }
+
+    async fn find(&self, entity_id: EntityId) -> RepoResult<Option<Entity>, EntityRepoError> {
+        let entity = self
+            .conn
+            .client
+            .query_opt(
+                &self.conn.statements.entities.find,
+                &[&entity_id.0, &self.set_id.0],
+            )
+            .await
+            .change_context(EntityRepoError::Get)?
+            .map(row_to_entity);
+        Ok(entity)
+    }
+
+    async fn create(&self, payload: Value) -> RepoResult<Entity, EntityRepoError> {
+        let entity_id = EntityId::new();
+        let row = self
+            .conn
+            .client
+            .query_one(
+                &self.conn.statements.entities.create,
+                &[&entity_id.0, &self.set_id.0, &payload],
+            )
+            .await
+            .change_context(EntityRepoError::Create)?;
+        Ok(row_to_entity(row))
+    }
+
+    async fn delete_all_in_set(&self) -> RepoResult<(), EntityRepoError> {
+        let removed_entity_count = self
+            .conn
+            .client
+            .execute(
+                &self.conn.statements.entities.delete_all_in_set,
+                &[&self.set_id.0],
+            )
+            .await
+            .change_context(EntityRepoError::Delete)?;
+
+        info!("removed {} entities", removed_entity_count);
+        Ok(())
+    }
+}
+
+pub struct ExistingEntityRepo {
+    conn: DbConnection,
+    topic_id: TopicId,
+    set_id: SetId,
+    entity_id: EntityId,
+}
+
+impl ExistingEntityRepository for ExistingEntityRepo {
+    async fn delete(&self) -> RepoResult<(), EntityRepoError> {
+        let deleted_count = self
+            .conn
+            .client
+            .execute(
+                &self.conn.statements.entities.delete,
+                &[&self.entity_id.0, &self.set_id.0],
+            )
+            .await
+            .change_context(EntityRepoError::Delete)?;
+
+        info!("deleted {} entities", deleted_count);
+        Ok(())
+    }
+
+    async fn update(&self, entity_update: EntityUpdate) -> RepoResult<Entity, EntityRepoError> {
+        let row = if let Some(payload) = entity_update.payload {
+            self.conn
+                .client
+                .query_one(
+                    &self.conn.statements.entities.update_payload,
+                    &[&payload, &self.entity_id.0, &self.set_id.0],
+                )
+                .await
+                .change_context(EntityRepoError::Update)?
+        } else {
+            info!("updated requested without update parameters, just getting entity");
+            self.conn
+                .client
+                .query_one(
+                    &self.conn.statements.entities.find,
+                    &[&self.entity_id.0, &self.set_id.0],
+                )
+                .await
+                .change_context(EntityRepoError::Update)?
+        };
+
+        Ok(row_to_entity(row))
+    }
+}
 
 pub struct IdentifierRepo; // TODO postgres pool
 

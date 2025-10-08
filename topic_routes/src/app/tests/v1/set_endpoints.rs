@@ -568,11 +568,8 @@ async fn run_delete_endpoint(path: &str, topic_repo: MockTopicRepo) -> TestRespo
 }
 
 fn init_test_server(topic_repo: MockTopicRepo) -> TestServer {
-    let repo = TestEngine::new(topic_repo);
-    let services = Service {
-        topics: TopicService::new(repo.clone()),
-        sets: SetService::new(repo),
-    };
+    let engine = TestEngine::new(topic_repo);
+    let services = Service::new(engine);
 
     let app_state = AppState::new(services);
 
@@ -584,6 +581,7 @@ fn init_test_server(topic_repo: MockTopicRepo) -> TestServer {
 mod return_scenario {
     use crate::app::services::ResourceOutcome;
     use crate::error::AppResult;
+    use chrono::Utc;
     use engine::error::{RepoResult, SetRepoError, TopicRepoError};
     use engine::models::Set;
     use engine::models::SetId;
@@ -592,7 +590,6 @@ mod return_scenario {
     use futures::FutureExt;
     use futures::future::BoxFuture;
     use serde_json::Value;
-    use chrono::Utc;
 
     type SetMockReturn<T> = RepoResult<T, SetRepoError>;
     type TopicMockReturn<'a, T> = BoxFuture<'a, AppResult<T, TopicRepoError>>;
@@ -693,7 +690,7 @@ mod return_scenario {
                         name,
                         description: None,
                         created: Utc::now(),
-                        updated: None,            
+                        updated: None,
                     }))
                 }
             }

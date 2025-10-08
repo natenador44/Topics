@@ -1,11 +1,13 @@
-use crate::error::{RepoResult, SetRepoError, TopicRepoError};
-use crate::models::{Set, SetId, Topic, TopicId};
+use crate::error::{EntityRepoError, RepoResult, SetRepoError, TopicRepoError};
+use crate::models::{Entity, EntityId, Set, SetId, Topic, TopicId};
+use crate::repository::entities::ExistingEntityRepository;
 use crate::repository::sets::ExistingSetRepository;
 use crate::repository::topics::ExistingTopicRepository;
-use crate::search_filters::{SetSearchCriteria, TopicSearchCriteria};
+use crate::search_filters::{EntitySearchCriteria, SetSearchCriteria, TopicSearchCriteria};
 use serde_json::Value;
 use std::sync::Arc;
 
+pub mod entities;
 pub mod sets;
 pub mod topics;
 
@@ -59,7 +61,31 @@ pub trait SetsRepository {
         set_search_criteria: SetSearchCriteria,
     ) -> impl Future<Output = RepoResult<Vec<Set>, SetRepoError>> + Send;
 }
-pub trait EntitiesRepository {}
+pub trait EntitiesRepository {
+    type ExistingEntityRepo: ExistingEntityRepository + Send + Sync + 'static;
+
+    fn expect_existing(
+        &self,
+        entity_id: EntityId,
+    ) -> impl Future<Output = RepoResult<Option<Self::ExistingEntityRepo>, EntityRepoError>> + Send;
+
+    fn search(
+        &self,
+        entity_search_criteria: EntitySearchCriteria,
+    ) -> impl Future<Output = RepoResult<Vec<Entity>, EntityRepoError>> + Send;
+
+    fn find(
+        &self,
+        entity_id: EntityId,
+    ) -> impl Future<Output = RepoResult<Option<Entity>, EntityRepoError>> + Send;
+
+    fn create(
+        &self,
+        payload: Value,
+    ) -> impl Future<Output = RepoResult<Entity, EntityRepoError>> + Send;
+
+    fn delete_all_in_set(&self) -> impl Future<Output = RepoResult<(), EntityRepoError>> + Send;
+}
 pub trait IdentifiersRepository {}
 
 impl<T> TopicsRepository for Arc<T>

@@ -2,8 +2,8 @@ use crate::models::IdentifierId;
 use crate::pagination::Pagination;
 use crate::search_criteria::{SearchCriteria, SearchFilter, Tag};
 
-const TOPIC_SEARCH_FILTER_MAX: usize = 2;
-pub type TopicSearchCriteria = SearchCriteria<TopicFilter, { TOPIC_SEARCH_FILTER_MAX }>;
+const MAX_TOPIC_SEARCH_FILTER_COUNT: usize = 2;
+pub type TopicSearchCriteria = SearchCriteria<TopicFilter, { MAX_TOPIC_SEARCH_FILTER_COUNT }>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TopicFilter {
@@ -12,7 +12,7 @@ pub enum TopicFilter {
 }
 
 impl SearchFilter for TopicFilter {
-    const MAX_FILTER_COUNT: usize = TOPIC_SEARCH_FILTER_MAX;
+    const MAX_FILTER_COUNT: usize = MAX_TOPIC_SEARCH_FILTER_COUNT;
     type Criteria = TopicSearchCriteria;
 
     fn tag(&self) -> Tag {
@@ -27,8 +27,8 @@ impl SearchFilter for TopicFilter {
     }
 }
 
-const MAX_SEARCH_FILTER_COUNT: usize = 3;
-pub type SetSearchCriteria = SearchCriteria<SetFilter, MAX_SEARCH_FILTER_COUNT>;
+const MAX_SET_SEARCH_FILTER_COUNT: usize = 3;
+pub type SetSearchCriteria = SearchCriteria<SetFilter, MAX_SET_SEARCH_FILTER_COUNT>;
 
 pub enum SetFilter {
     Name(String),
@@ -37,7 +37,7 @@ pub enum SetFilter {
 }
 
 impl SearchFilter for SetFilter {
-    const MAX_FILTER_COUNT: usize = MAX_SEARCH_FILTER_COUNT;
+    const MAX_FILTER_COUNT: usize = MAX_SET_SEARCH_FILTER_COUNT;
     type Criteria = SetSearchCriteria;
 
     fn tag(&self) -> Tag {
@@ -50,5 +50,21 @@ impl SearchFilter for SetFilter {
 
     fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria {
         SearchCriteria::new(pagination, default_page_size)
+    }
+}
+const MAX_ENTITY_SEARCH_FILTER_COUNT: usize = 3;
+pub type EntitySearchCriteria = SearchCriteria<SetFilter, MAX_ENTITY_SEARCH_FILTER_COUNT>;
+
+pub enum EntityFilter {}
+impl SearchFilter for EntityFilter {
+    const MAX_FILTER_COUNT: usize = 0;
+    type Criteria = EntitySearchCriteria;
+
+    fn tag(&self) -> Tag {
+        Tag::One
+    }
+
+    fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria {
+        EntitySearchCriteria::new(pagination, default_page_size)
     }
 }

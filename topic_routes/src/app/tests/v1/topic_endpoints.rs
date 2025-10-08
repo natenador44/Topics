@@ -1,4 +1,4 @@
-use crate::app::services::SetService;
+use crate::app::services::{EntityService, SetService};
 use crate::app::tests::{MockExistingTopicRepo, MockTopicRepo, TestEngine};
 use crate::app::{
     routes,
@@ -755,10 +755,7 @@ async fn run_delete_endpoint(path: &str, topic_repo: MockTopicRepo) -> TestRespo
 
 fn init_test_server(topic_repo: MockTopicRepo) -> TestServer {
     let engine = TestEngine::new(topic_repo);
-    let services = Service {
-        topics: TopicService::new(engine.clone()),
-        sets: SetService::new(engine),
-    };
+    let services = Service::new(engine);
 
     let app_state = AppState::new(services);
 

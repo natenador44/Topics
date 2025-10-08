@@ -1,6 +1,8 @@
+mod entities;
 mod sets;
 mod topics;
 
+pub use entities::EntityService;
 pub use sets::SetService;
 pub use topics::TopicService;
 
@@ -11,6 +13,20 @@ use engine::Engine;
 pub struct Service<T> {
     pub topics: TopicService<T>,
     pub sets: SetService<T>,
+    pub entities: EntityService<T>,
+}
+
+impl<T> Service<T>
+where
+    T: Engine + Clone,
+{
+    pub fn new(engine: T) -> Self {
+        Self {
+            topics: TopicService::new(engine.clone()),
+            sets: SetService::new(engine.clone()),
+            entities: EntityService::new(engine),
+        }
+    }
 }
 
 /// Used for service methods that only need to report if
@@ -29,6 +45,7 @@ pub struct ServiceBuildError;
 pub fn build<T: Engine>(engine: T) -> AppResult<Service<T>, ServiceBuildError> {
     Ok(Service {
         topics: TopicService::new(engine.clone()),
-        sets: SetService::new(engine),
+        sets: SetService::new(engine.clone()),
+        entities: EntityService::new(engine),
     })
 }

@@ -20,6 +20,41 @@ impl<T> SetService<T>
 where
     T: Engine,
 {
+    async fn get_set_repo(
+        &self,
+        topic_id: TopicId,
+    ) -> AppResult<Option<impl SetsRepository>, SetServiceError> {
+        let set_repo = self
+            .engine
+            .topics()
+            .expect_existing(topic_id)
+            .await
+            .change_context(SetServiceError)?
+            .map(|tr| tr.sets());
+
+        Ok(set_repo)
+    }
+
+    async fn get_existing_set_repo(
+        &self,
+        topic_id: TopicId,
+        set_id: SetId,
+    ) -> AppResult<Option<impl ExistingSetRepository>, SetServiceError> {
+        let Some(set_repo) = self.get_set_repo(topic_id).await? else {
+            return Ok(None);
+        };
+
+        set_repo
+            .expect_existing(set_id)
+            .await
+            .change_context(SetServiceError)
+    }
+}
+
+impl<T> SetService<T>
+where
+    T: Engine,
+{
     pub fn new(repo: T) -> Self {
         Self { engine: repo }
     }
@@ -32,19 +67,11 @@ where
     ) -> AppResult<Option<Vec<Set>>, SetServiceError> {
         info!("searching sets..");
 
-        let Some(topic) = self
-            .engine
-            .topics()
-            .expect_existing(topic_id)
-            .await
-            .change_context(SetServiceError)?
-        else {
-            debug!("topic does not exist");
+        let Some(set_repo) = self.get_set_repo(topic_id).await? else {
             return Ok(None);
         };
 
-        let sets = topic
-            .sets()
+        let sets = set_repo
             .search(search_criteria)
             .await
             .change_context(SetServiceError)?;
@@ -68,22 +95,18 @@ where
         description: Option<String>,
         initial_entity_payloads: Option<Vec<Value>>,
     ) -> AppResult<Option<Set>, SetServiceError> {
-        let Some(topic) = self
-            .engine
-            .topics()
-            .expect_existing(topic_id)
-            .await
-            .change_context(SetServiceError)?
-        else {
-            debug!("topic does not exist");
+        let Some(set_repo) = self.get_set_repo(topic_id).await? else {
             return Ok(None);
         };
 
         debug!("topic does exist, creating set");
 
-        let new_set = topic
-            .sets()
-            .create(set_name, description, initial_entity_payloads.unwrap_or_default())
+        let new_set = set_repo
+            .create(
+                set_name,
+                description,
+                initial_entity_payloads.unwrap_or_default(),
+            )
             .await
             .change_context(SetServiceError)?;
 
@@ -97,22 +120,11 @@ where
         topic_id: TopicId,
         set_id: SetId,
     ) -> AppResult<Option<Set>, SetServiceError> {
-        let Some(topic) = self
-            .engine
-            .topics()
-            .expect_existing(topic_id)
-            .await
-            .change_context(SetServiceError)?
-        else {
-            debug!("topic does not exist");
+        let Some(set_repo) = self.get_set_repo(topic_id).await? else {
             return Ok(None);
         };
 
-        topic
-            .sets()
-            .find(set_id)
-            .await
-            .change_context(SetServiceError)
+        set_repo.find(set_id).await.change_context(SetServiceError)
     }
 
     #[instrument(skip_all, name = "service#delete")]
@@ -121,29 +133,12 @@ where
         topic_id: TopicId,
         set_id: SetId,
     ) -> AppResult<ResourceOutcome, SetServiceError> {
-        let Some(topic) = self
-            .engine
-            .topics()
-            .expect_existing(topic_id)
-            .await
-            .change_context(SetServiceError)?
-        else {
-            debug!("topic does not exist");
-            return Ok(ResourceOutcome::NotFound);
-        };
-
-        let Some(set) = topic
-            .sets()
-            .expect_existing(set_id)
-            .await
-            .change_context(SetServiceError)?
-        else {
-            debug!("set does not exist");
+        let Some(set_repo) = self.get_existing_set_repo(topic_id, set_id).await? else {
             return Ok(ResourceOutcome::NotFound);
         };
 
         info!("deleting set");
-        set.delete().await.change_context(SetServiceError)?;
+        set_repo.delete().await.change_context(SetServiceError)?;
         Ok(ResourceOutcome::Found)
     }
 }
