@@ -18,12 +18,15 @@ use optional_field::Field;
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tokio_postgres::types::ToSql;
-use tokio_postgres::{GenericClient, NoTls, Row, Statement, connect};
+use tokio_postgres::{Client, GenericClient, NoTls, Row, Statement, connect};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, instrument, warn};
 
 mod connection;
 mod migration;
+
+#[cfg(test)]
+mod tests;
 
 pub enum ConnectionDetails {
     Url(String),

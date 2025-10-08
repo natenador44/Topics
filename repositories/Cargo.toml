@@ -17,3 +17,7 @@ tokio-stream = { workspace = true }
 
 [features]
 postgres = ["dep:tokio-postgres", "refinery/tokio-postgres"]
+
+[dev-dependencies]
+rstest = "0.26.1"
+testcontainers-modules = { version = "0.13.0", features = ["postgres"] }
