@@ -13,6 +13,14 @@ const_format = { workspace = true }
 uuid = { workspace = true, features = ["serde"]}
 chrono = { workspace = true, features = ["serde"]}
 optional-field = { workspace = true }
+tokio-stream = { workspace = true }
+axum-streams = { workspace = true }
+axum = { workspace = true }
+mongodb = { workspace = true }
+tower-http = { workspace = true}
+tower = { workspace = true}
+tracing = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 mockall = "0.13.1"

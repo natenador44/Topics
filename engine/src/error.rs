@@ -1,53 +1,29 @@
 use error_stack::Report;
 use std::error::Error;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 
-pub type RepoResult<T, E> = Result<T, Report<E>>;
-#[derive(Debug, thiserror::Error)]
-pub enum TopicRepoError {
-    #[error("failed to search topics")]
-    Search,
-    #[error("error occurred while finding topic")]
-    Get,
-    #[error("failed to create new topic")]
-    Create,
-    #[error("failed to delete topic")]
-    Delete,
-    #[error("failed to update topic")]
-    Update,
-    #[error("failed to check if topic exists")]
-    Exists,
+#[derive(thiserror::Error)]
+#[error("there was an error running the endpoint")]
+pub struct ServiceError<T: Error>(Report<T>);
+
+impl<T: Error> std::fmt::Debug for ServiceError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum SetRepoError {
-    #[error("failed to create set")]
-    Create,
-    #[error("failed to get set")]
-    Get,
-    #[error("failed to delete set")]
-    Delete,
-    #[error("failed to search sets")]
-    Search,
-    #[error("failed to check if set exists")]
-    Exists,
-    #[error("failed to update set")]
-    Update,
+impl<T> From<Report<T>> for ServiceError<T>
+where
+    T: Error,
+{
+    fn from(value: Report<T>) -> Self {
+        Self(value)
+    }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum EntityRepoError {
-    #[error("failed to create entity")]
-    Create,
-    #[error("failed to get entity")]
-    Get,
-    #[error("failed to delete entity")]
-    Delete,
-    #[error("failed to search entities")]
-    Search,
-    #[error("failed to check if entity exists")]
-    Exists,
-    #[error("failed to delete all entities in set")]
-    DeleteAllInSet,
-    #[error("failed to update entity")]
-    Update,
+impl<T: Error> IntoResponse for ServiceError<T> {
+    fn into_response(self) -> axum::response::Response {
+        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
 }

@@ -1,22 +1,15 @@
-use crate::repository::TopicsRepository;
-use std::fmt::Debug;
 use utoipa::PartialSchema;
 use utoipa::openapi::{RefOr, Schema};
 
 pub mod error;
-pub mod models;
 mod pagination;
 pub use pagination::Pagination;
-pub mod repository;
 pub mod search_criteria;
-pub mod search_filters;
+pub mod stream;
 
-pub trait Engine: Debug + Clone + Send + Sync + 'static {
-    type Repo: TopicsRepository + Send + Sync + 'static;
-    // type Cache: Cache + Send + Sync + 'static;
+pub mod id;
 
-    fn topics(&self) -> Self::Repo;
-}
+pub mod app;
 
 pub fn patch_field_schema() -> impl Into<RefOr<Schema>> {
     <Option<String> as PartialSchema>::schema()
