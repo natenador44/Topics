@@ -4,6 +4,7 @@ use engine::{Pagination, patch_field_schema};
 use std::fmt::Debug;
 
 use crate::error::TopicServiceError;
+use crate::filter::{TopicFilter, TopicListCriteria};
 use crate::model::Topic;
 use crate::service::TopicService;
 use crate::state::TopicAppState;
@@ -18,6 +19,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use engine::error::ServiceError;
 use engine::id::TopicId;
+use engine::list_criteria::SearchFilter;
 use optional_field::{Field, serde_optional_fields};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
@@ -63,7 +65,7 @@ pub struct TopicSearch {
     name: Option<String>,
     description: Option<String>,
 }
-const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u32 = 25;
+const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u64 = 25;
 
 const TOPIC_LIST_PATH: &str = "/";
 const TOPIC_GET_PATH: &str = "/{topic_id}";
@@ -102,8 +104,6 @@ struct TopicResponse {
     description: Option<String>,
     created: DateTime<Utc>,
     updated: Option<DateTime<Utc>>,
-    sets_url: String,
-    identifiers_url: String,
 }
 
 impl TopicResponse {
@@ -115,8 +115,6 @@ impl TopicResponse {
             description: topic.description,
             created: topic.created,
             updated: topic.updated,
-            sets_url: format!("/api/v1/topics/{}/sets", topic.id),
-            identifiers_url: format!("/api/v1/topics/{}/identifiers", topic.id),
         }
     }
 
@@ -128,8 +126,6 @@ impl TopicResponse {
             description: topic.description,
             created: topic.created,
             updated: topic.updated,
-            sets_url: format!("/api/v1/topics/{}/sets", topic.id),
-            identifiers_url: format!("/api/v1/topics/{}/identifiers", topic.id),
         }
     }
 }
@@ -159,7 +155,13 @@ pub async fn list_topics(
     State(service): State<TopicService>,
     Query(pagination): Query<Pagination>,
 ) -> Result<Response, ServiceError<TopicServiceError>> {
-    let topics = service.list(pagination).await?;
+    // TODO can list by name as well
+    let topics = service
+        .list(TopicFilter::criteria(
+            pagination,
+            DEFAULT_TOPIC_SEARCH_PAGE_SIZE,
+        ))
+        .await?;
 
     let res = if topics.is_empty() {
         StatusCode::NO_CONTENT.into_response()

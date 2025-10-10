@@ -1,28 +1,48 @@
+use mongodb::bson::Bson;
 use mongodb::bson::oid::ObjectId;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
+use std::str::FromStr;
+use std::sync::Arc;
 use utoipa::ToSchema;
+use utoipa::openapi::Object;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
 #[repr(transparent)]
-#[serde(transparent)]
-pub struct TopicId {
-    #[schema(value_type = String)]
-    inner: ObjectId,
+#[schema(value_type = String)]
+pub struct TopicId(#[serde(serialize_with = "obj_id_serialize")] ObjectId);
+
+fn obj_id_serialize<S>(id: &ObjectId, ser: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    id.to_hex().serialize(ser)
+}
+
+impl TopicId {
+    pub fn new(id: ObjectId) -> Self {
+        Self(id)
+    }
 }
 
 impl Deref for TopicId {
     type Target = ObjectId;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
+    }
+}
+
+impl From<TopicId> for Bson {
+    fn from(value: TopicId) -> Self {
+        value.0.into()
     }
 }
 
 impl Display for TopicId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+        write!(f, "{}", self.0)
     }
 }
 

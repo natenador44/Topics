@@ -3,7 +3,7 @@ use mongodb::Client;
 use topic_service::repository::TopicRepo;
 use topic_service::service::TopicService;
 use topic_service::state::TopicAppState;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, fmt};
@@ -32,6 +32,7 @@ async fn try_main() -> AppResult<()> {
     let db_connection_str = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
         "mongodb://admin:password@127.0.0.1:27017/?authSource=admin".to_string()
     });
+    debug!("connection string: {}", db_connection_str);
     let client = Client::with_uri_str(db_connection_str).await.unwrap();
 
     let routes = topic_service::routes::build(TopicAppState::new(TopicService::new(

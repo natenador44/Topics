@@ -26,7 +26,7 @@ pub trait SearchFilter {
     const MAX_FILTER_COUNT: usize;
     type Criteria;
     fn tag(&self) -> Tag;
-    fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria;
+    fn criteria(pagination: Pagination, default_page_size: u64) -> Self::Criteria;
 }
 
 /*
@@ -46,12 +46,12 @@ How about HashSet?
 /// let _ = SearchCriteria::<TestFilter, 256>::new(Pagination { page: 1, page_size: None }, 0);
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct SearchCriteria<T, const N: usize> {
+pub struct ListCriteria<T, const N: usize> {
     inner: Box<SearchCriteriaInner<T, N>>,
 }
 
-impl<T, const N: usize> SearchCriteria<T, N> {
-    pub fn new(pagination: Pagination, default_page_size: u32) -> Self {
+impl<T, const N: usize> ListCriteria<T, N> {
+    pub fn new(pagination: Pagination, default_page_size: u64) -> Self {
         const {
             assert!(
                 N <= MaxFilterCountType::MAX as usize,
@@ -68,11 +68,11 @@ impl<T, const N: usize> SearchCriteria<T, N> {
         }
     }
 
-    pub fn page(&self) -> u32 {
+    pub fn page(&self) -> u64 {
         self.inner.pagination.page
     }
 
-    pub fn page_size(&self) -> u32 {
+    pub fn page_size(&self) -> u64 {
         self.inner
             .pagination
             .page_size
@@ -88,10 +88,10 @@ impl<T, const N: usize> SearchCriteria<T, N> {
 struct SearchCriteriaInner<T, const N: usize> {
     filters: Option<SearchCriteriaFilters<T, N>>,
     pagination: Pagination,
-    default_page_size: u32,
+    default_page_size: u64,
 }
 
-impl<T, const N: usize> SearchCriteria<T, N>
+impl<T, const N: usize> ListCriteria<T, N>
 where
     T: SearchFilter,
 {
@@ -176,7 +176,7 @@ mod tests {
 
     impl SearchFilter for TestSearch {
         const MAX_FILTER_COUNT: usize = 3;
-        type Criteria = SearchCriteria<Self, { Self::MAX_FILTER_COUNT }>;
+        type Criteria = ListCriteria<Self, { Self::MAX_FILTER_COUNT }>;
 
         fn tag(&self) -> Tag {
             match self {
@@ -186,8 +186,8 @@ mod tests {
             }
         }
 
-        fn criteria(pagination: Pagination, default_page_size: u32) -> Self::Criteria {
-            SearchCriteria::new(pagination, default_page_size)
+        fn criteria(pagination: Pagination, default_page_size: u64) -> Self::Criteria {
+            ListCriteria::new(pagination, default_page_size)
         }
     }
 
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn search_criteria_size_no_larger_than_hash_set() {
         let hash_set_size = size_of::<HashSet<TestSearch>>();
-        let criteria_size = size_of::<SearchCriteria<TestSearch, 3>>();
+        let criteria_size = size_of::<ListCriteria<TestSearch, 3>>();
         assert!(
             criteria_size <= hash_set_size,
             "{} <= {} failed",
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn search_criteria_size_no_larger_than_vec() {
         let vec_size = size_of::<Vec<TestSearch>>();
-        let criteria_size = size_of::<SearchCriteria<TestSearch, 3>>();
+        let criteria_size = size_of::<ListCriteria<TestSearch, 3>>();
         assert!(
             criteria_size <= vec_size,
             "{} <= {} failed",

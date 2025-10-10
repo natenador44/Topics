@@ -6,6 +6,8 @@ pub struct TopicServiceError;
 pub enum TopicRepoError {
     #[error("failed to get topic")]
     Get,
+    #[error("failed to list topics")]
+    List,
     #[error("failed to create topic")]
     Create,
     #[error("failed to patch topic")]

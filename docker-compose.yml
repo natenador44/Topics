@@ -1,15 +1,20 @@
 services:
-  db:
-    image: postgres:17 # Uses the latest official PostgreSQL image
-    restart: always # Restarts the container if it stops
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER} # Database username
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Database password
-      POSTGRES_DB: ${POSTGRES_DB} # Database name
+  mongo:
+    image: mongo
+    restart: always
     ports:
-      - "5432:5432" # Maps host port 5432 to container port 5432
-    volumes:
-      - pgdata:/var/lib/postgresql/data # Persists data to a named volume
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: topics
+      MONGO_INITDB_ROOT_PASSWORD: password1
 
-volumes:
-  pgdata: # Defines the named volume for data persistence
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://topics:password1@mongo:27017/
+      ME_CONFIG_BASICAUTH_ENABLED: true
+      ME_CONFIG_BASICAUTH_USERNAME: mongoexpressuser
+      ME_CONFIG_BASICAUTH_PASSWORD: mongoexpresspass

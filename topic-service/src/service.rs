@@ -1,9 +1,11 @@
 use crate::error::TopicServiceError;
+use crate::filter::TopicListCriteria;
 use crate::model::Topic;
-use crate::repository::{NewTopic, TopicPatch, TopicRepo};
+use crate::repository::{NewTopicRequest, TopicPatch, TopicRepo};
 use crate::{OptServiceResult, ServiceResult};
 use engine::Pagination;
 use engine::id::TopicId;
+use engine::list_criteria::ListCriteria;
 use error_stack::ResultExt;
 use optional_field::Field;
 use tracing::instrument;
@@ -23,9 +25,9 @@ impl TopicService {
         self.repo.get(id).await.change_context(TopicServiceError)
     }
 
-    pub async fn list(&self, pagination: Pagination) -> ServiceResult<Vec<Topic>> {
+    pub async fn list(&self, list_criteria: TopicListCriteria) -> ServiceResult<Vec<Topic>> {
         self.repo
-            .list(pagination)
+            .list(list_criteria)
             .await
             .change_context(TopicServiceError)
     }
@@ -33,7 +35,7 @@ impl TopicService {
     #[instrument(skip_all, name = "service#create")]
     pub async fn create(&self, name: String, description: Option<String>) -> ServiceResult<Topic> {
         self.repo
-            .create(NewTopic::new(name, description))
+            .create(NewTopicRequest::new(name, description))
             .await
             .change_context(TopicServiceError)
     }

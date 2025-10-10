@@ -4,7 +4,7 @@ use utoipa::openapi::{RefOr, Schema};
 pub mod error;
 mod pagination;
 pub use pagination::Pagination;
-pub mod search_criteria;
+pub mod list_criteria;
 pub mod stream;
 
 pub mod id;
