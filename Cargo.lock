@@ -2377,6 +2377,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
+name = "repositories"
+version = "0.1.0"
+dependencies = [
+ "bson",
+ "chrono",
+ "error-stack",
+ "mongodb",
+ "optional-field",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio-stream",
+ "topics-core",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
 name = "reserve-port"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3332,7 +3349,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "topic-service"
+name = "topics-app"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "engine",
+ "error-stack",
+ "repositories",
+ "tokio",
+ "topics-core",
+ "topics-routes",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "topics-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "engine",
+ "error-stack",
+ "optional-field",
+ "serde",
+ "thiserror 2.0.17",
+ "utoipa",
+]
+
+[[package]]
+name = "topics-routes"
 version = "0.1.0"
 dependencies = [
  "axum",
@@ -3352,6 +3397,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
+ "topics-core",
  "tracing",
  "tracing-subscriber",
  "utoipa",

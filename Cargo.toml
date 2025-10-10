@@ -1,5 +1,5 @@
 [workspace]
-members = ["engine", "entity-service", "set-service", "topic-service"]
+members = ["engine", "entity-service", "repositories", "set-service", "topics-core", "topics-routes", "topics-app"]
 resolver = "3"
 
 [workspace.dependencies]

@@ -1,0 +1,19 @@
+[package]
+name = "topics-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+repositories = { path = "../repositories", optional = true }
+topics-routes = { path = "../topics-routes" }
+topics-core = { path = "../topics-core" }
+engine = { path = "../engine" }
+tokio = {workspace = true }
+axum = { workspace = true}
+error-stack = {workspace = true}
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[features]
+default = ["mongo-topic-repo"]
+mongo-topic-repo = ["dep:repositories", "repositories/mongodb", "repositories/topics"]

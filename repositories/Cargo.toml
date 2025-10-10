@@ -1,0 +1,22 @@
+[package]
+name = "repositories"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { workspace = true }
+chrono = { workspace = true }
+utoipa = { workspace = true }
+error-stack = { workspace = true }
+thiserror = { workspace = true }
+tokio-stream = { workspace = true }
+optional-field = { workspace = true }
+tracing = { workspace = true }
+topics-core = { path = "../topics-core", optional = true }
+mongodb = { workspace = true, optional = true }
+bson = { version = "2.15.0", features = ["chrono-0_4", "serde_with"], optional = true }
+
+[features]
+default = ["mongodb", "topics"]
+mongodb = ["dep:mongodb", "dep:bson"]
+topics = ["dep:topics-core"]

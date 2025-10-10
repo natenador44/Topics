@@ -1,0 +1,13 @@
+[package]
+name = "topics-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+optional-field = { workspace = true }
+chrono = { workspace = true }
+error-stack = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+utoipa = { workspace = true }
+engine = { path = "../engine" }

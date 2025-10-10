@@ -1,11 +1,6 @@
 mod requests;
 mod responses;
-use engine::{Pagination, patch_field_schema};
-use std::fmt::Debug;
-
 use crate::error::TopicServiceError;
-use crate::filter::{TopicFilter, TopicListCriteria};
-use crate::model::Topic;
 use crate::service::TopicService;
 use crate::state::TopicAppState;
 use axum::routing::patch;
@@ -18,10 +13,13 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use engine::error::ServiceError;
-use engine::id::TopicId;
 use engine::list_criteria::SearchFilter;
+use engine::{Pagination, patch_field_schema};
 use optional_field::{Field, serde_optional_fields};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use topics_core::{Topic, TopicEngine, TopicFilter, TopicId};
 use tracing::{info, instrument};
 use utoipa::OpenApi;
 use utoipa::ToSchema;
@@ -73,7 +71,7 @@ const TOPIC_CREATE_PATH: &str = "/";
 const TOPIC_DELETE_PATH: &str = "/{topic_id}";
 const TOPIC_PATCH_PATH: &str = "/{topic_id}";
 
-pub fn build(app_state: TopicAppState) -> Router {
+pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(routes(app_state))
         .split_for_parts();
@@ -81,7 +79,7 @@ pub fn build(app_state: TopicAppState) -> Router {
     router.merge(SwaggerUi::new("/topics/swagger-ui").url("/topics/api-docs/openapi.json", api))
 }
 
-fn routes<S>(app_state: TopicAppState) -> OpenApiRouter<S> {
+fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
     OpenApiRouter::new()
         .nest(
             TOPIC_ROOT_PATH,
@@ -96,18 +94,20 @@ fn routes<S>(app_state: TopicAppState) -> OpenApiRouter<S> {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-struct TopicResponse {
+struct TopicResponse<T> {
     #[serde(skip)]
     status_code: StatusCode,
-    id: TopicId,
+    id: T,
     name: String,
     description: Option<String>,
     created: DateTime<Utc>,
     updated: Option<DateTime<Utc>>,
+    #[serde(skip)]
+    _phantom: PhantomData<T>,
 }
 
-impl TopicResponse {
-    fn ok(topic: Topic) -> Self {
+impl<T> TopicResponse<T> {
+    fn ok(topic: Topic<T>) -> Self {
         Self {
             status_code: StatusCode::OK,
             id: topic.id,
@@ -115,10 +115,11 @@ impl TopicResponse {
             description: topic.description,
             created: topic.created,
             updated: topic.updated,
+            _phantom: PhantomData,
         }
     }
 
-    fn created(topic: Topic) -> Self {
+    fn created(topic: Topic<T>) -> Self {
         Self {
             status_code: StatusCode::CREATED,
             id: topic.id,
@@ -126,15 +127,21 @@ impl TopicResponse {
             description: topic.description,
             created: topic.created,
             updated: topic.updated,
+            _phantom: PhantomData,
         }
     }
 }
 
-impl IntoResponse for TopicResponse {
+impl<T: TopicId> IntoResponse for TopicResponse<T> {
     fn into_response(self) -> Response {
         (self.status_code, Json(self)).into_response()
     }
 }
+
+#[derive(Debug, ToSchema, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
+struct IdType;
+
+type ResponseType = Topic<IdType>;
 
 /// Get the topic associated with the given id.
 // #[axum::debug_handler]
@@ -142,7 +149,7 @@ impl IntoResponse for TopicResponse {
     get,
     path = TOPIC_LIST_PATH,
     responses(
-        (status = OK, description = "Topics were found on the given page", body = Vec<Topic>),
+        (status = OK, description = "Topics were found on the given page", body = Vec<ResponseType>),
         (status = NO_CONTENT, description = "No topics exist on the given page"),
     ),
     params(
@@ -151,10 +158,13 @@ impl IntoResponse for TopicResponse {
     )
 )]
 #[instrument(skip(service), err(Debug))]
-pub async fn list_topics(
-    State(service): State<TopicService>,
+pub async fn list_topics<T>(
+    State(service): State<TopicService<T>>,
     Query(pagination): Query<Pagination>,
-) -> Result<Response, ServiceError<TopicServiceError>> {
+) -> Result<Response, ServiceError<TopicServiceError>>
+where
+    T: TopicEngine + Send + Sync + 'static,
+{
     // TODO can list by name as well
     let topics = service
         .list(TopicFilter::criteria(
@@ -177,18 +187,21 @@ pub async fn list_topics(
     get,
     path = TOPIC_GET_PATH,
     responses(
-        (status = OK, description = "A topic was found that matched the given TopicId", body = Topic),
+        (status = OK, description = "A topic was found that matched the given TopicId", body = Topic<IdType>),
         (status = NOT_FOUND, description = "No topics with the given TopicId were found"),
     ),
     params(
-        ("topic_id" = TopicId, Path, description = "The TopicId to find"),
+        ("topic_id" = IdType, Path, description = "The TopicId to find"),
     )
 )]
 #[instrument(skip(service), err(Debug))]
-pub async fn get_topic(
-    State(service): State<TopicService>,
-    Path(topic_id): Path<TopicId>,
-) -> Result<Response, ServiceError<TopicServiceError>> {
+pub async fn get_topic<T>(
+    State(service): State<TopicService<T>>,
+    Path(topic_id): Path<T::TopicId>,
+) -> Result<Response, ServiceError<TopicServiceError>>
+where
+    T: TopicEngine,
+{
     let topic = service.get(topic_id).await?;
 
     Ok(topic
@@ -201,15 +214,18 @@ pub async fn get_topic(
     post,
     path = TOPIC_CREATE_PATH,
     responses(
-        (status = CREATED, description = "A topic was successfully created", body = TopicResponse),
+        (status = CREATED, description = "A topic was successfully created", body = TopicResponse<IdType>),
     ),
     request_body = TopicRequest
 )]
 #[instrument(skip_all, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
-async fn create_topic(
-    State(service): State<TopicService>,
+async fn create_topic<T>(
+    State(service): State<TopicService<T>>,
     Json(topic): Json<TopicRequest>,
-) -> Result<TopicResponse, ServiceError<TopicServiceError>> {
+) -> Result<TopicResponse<T::TopicId>, ServiceError<TopicServiceError>>
+where
+    T: TopicEngine,
+{
     let new_topic = service.create(topic.name, topic.description).await?;
     Ok(TopicResponse::created(new_topic))
 }
@@ -222,14 +238,17 @@ async fn create_topic(
         (status = NO_CONTENT, description = "The topic was successfully deleted, or never existed"),
     ),
     params(
-        ("topic_id" = TopicId, Path, description = "The ID of the topic to delete to delete")
+        ("topic_id" = IdType, Path, description = "The ID of the topic to delete to delete")
     )
 )]
 #[instrument(skip(service), err(Debug))]
-pub async fn delete_topic(
-    State(service): State<TopicService>,
-    Path(topic_id): Path<TopicId>,
-) -> Result<StatusCode, ServiceError<TopicServiceError>> {
+pub async fn delete_topic<T>(
+    State(service): State<TopicService<T>>,
+    Path(topic_id): Path<T::TopicId>,
+) -> Result<StatusCode, ServiceError<TopicServiceError>>
+where
+    T: TopicEngine,
+{
     match service.delete(topic_id).await? {
         Some(_) => Ok(StatusCode::NO_CONTENT),
         None => Ok(StatusCode::NOT_FOUND),
@@ -241,11 +260,11 @@ pub async fn delete_topic(
     patch,
     path = TOPIC_PATCH_PATH,
     responses(
-        (status = OK, description = "The topic was successfully patched", body = Topic),
+        (status = OK, description = "The topic was successfully patched", body = Topic<IdType>),
         (status = NOT_FOUND, description = "The topic was not found so could not be updated"),
     ),
     params(
-        ("topic_id" = TopicId, Path, description = "The TopicId to patch")
+        ("topic_id" = IdType, Path, description = "The TopicId to patch")
     ),
     request_body = TopicPatchRequest,
 )]
@@ -253,11 +272,14 @@ pub async fn delete_topic(
     topic.name = topic.name,
     topic.desc = topic.description.as_ref().map_present_or(None, |d| Some(d.map(String::as_str).unwrap_or("null"))),
 ))]
-pub async fn patch_topic(
-    State(service): State<TopicService>,
-    Path(topic_id): Path<TopicId>,
+pub async fn patch_topic<T>(
+    State(service): State<TopicService<T>>,
+    Path(topic_id): Path<T::TopicId>,
     Json(topic): Json<TopicPatchRequest>,
-) -> Result<Response, ServiceError<TopicServiceError>> {
+) -> Result<Response, ServiceError<TopicServiceError>>
+where
+    T: TopicEngine,
+{
     let updated_topic = service
         .patch(topic_id, topic.name, topic.description)
         .await?;
