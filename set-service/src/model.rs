@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
+use engine::id::{SetId, TopicId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use engine::id::{SetId, TopicId};
-
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Set {

@@ -1,10 +1,10 @@
+use crate::error::TopicRepoError;
+use crate::model::Topic;
+use engine::Pagination;
+use engine::id::TopicId;
 use error_stack::Report;
 use mongodb::Client;
 use optional_field::Field;
-use engine::id::TopicId;
-use engine::Pagination;
-use crate::error::TopicRepoError;
-use crate::model::Topic;
 
 pub type RepoResult<T> = Result<T, Report<TopicRepoError>>;
 pub type OptRepoResult<T> = Result<Option<T>, Report<TopicRepoError>>;
@@ -28,7 +28,7 @@ pub struct TopicPatch {
 impl TopicPatch {
     pub fn new(name: Option<String>, description: Field<String>) -> TopicPatch {
         Self { name, description }
-    } 
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,21 +44,21 @@ impl TopicRepo {
 
 impl TopicRepo {
     pub async fn get(&self, topic_id: TopicId) -> OptRepoResult<Topic> {
-        todo!() 
+        todo!()
     }
-    
+
     pub async fn list(&self, pagination: Pagination) -> RepoResult<Vec<Topic>> {
-        todo!() 
+        todo!()
     }
-    
+
     pub async fn create(&self, new_topic: NewTopic) -> RepoResult<Topic> {
         todo!()
     }
-    
+
     pub async fn delete(&self, topic_id: TopicId) -> OptRepoResult<()> {
         todo!()
     }
-    
+
     pub async fn patch(&self, topic_id: TopicId, patch: TopicPatch) -> OptRepoResult<Topic> {
         todo!()
     }

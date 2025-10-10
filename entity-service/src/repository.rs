@@ -1,11 +1,11 @@
+use crate::error::EntityRepoError;
+use crate::model::Entity;
+use engine::Pagination;
+use engine::id::{EntityId, SetId, TopicId};
 use error_stack::Report;
 use mongodb::Client;
 use optional_field::Field;
 use serde_json::Value;
-use engine::id::{EntityId, SetId, TopicId};
-use engine::Pagination;
-use crate::error::EntityRepoError;
-use crate::model::Entity;
 
 pub type RepoResult<T> = Result<T, Report<EntityRepoError>>;
 pub type OptRepoResult<T> = Result<Option<T>, Report<EntityRepoError>>;
@@ -18,7 +18,11 @@ pub struct NewEntity {
 
 impl NewEntity {
     pub fn new(topic_id: TopicId, set_id: SetId, payload: Value) -> NewEntity {
-        Self { topic_id, set_id, payload }
+        Self {
+            topic_id,
+            set_id,
+            payload,
+        }
     }
 }
 

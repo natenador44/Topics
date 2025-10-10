@@ -1,7 +1,7 @@
-use error_stack::Report;
-use std::error::Error;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use error_stack::Report;
+use std::error::Error;
 
 #[derive(thiserror::Error)]
 #[error("there was an error running the endpoint")]

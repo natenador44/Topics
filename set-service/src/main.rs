@@ -1,12 +1,12 @@
-use mongodb::Client;
-use tracing::{error, info};
-use tracing_subscriber::{fmt, EnvFilter};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 use engine::app::{AppProperties, AppResult};
+use mongodb::Client;
 use set_service::repository::SetRepo;
 use set_service::service::SetService;
 use set_service::state::SetAppState;
+use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[tokio::main]
 async fn main() {
@@ -34,7 +34,8 @@ async fn try_main() -> AppResult<()> {
     });
     let client = Client::with_uri_str(db_connection_str).await.unwrap();
 
-    let routes = set_service::routes::build(SetAppState::new(SetService::new(SetRepo::new(client))));
+    let routes =
+        set_service::routes::build(SetAppState::new(SetService::new(SetRepo::new(client))));
 
     engine::app::run(routes, AppProperties { port: 3000 }).await
 }

@@ -1,12 +1,12 @@
-use mongodb::Client;
-use tracing::{error, info};
-use tracing_subscriber::{fmt, EnvFilter};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 use engine::app::{AppProperties, AppResult};
+use mongodb::Client;
 use topic_service::repository::TopicRepo;
 use topic_service::service::TopicService;
 use topic_service::state::TopicAppState;
+use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[tokio::main]
 async fn main() {
@@ -33,8 +33,10 @@ async fn try_main() -> AppResult<()> {
         "mongodb://admin:password@127.0.0.1:27017/?authSource=admin".to_string()
     });
     let client = Client::with_uri_str(db_connection_str).await.unwrap();
-    
-    let routes = topic_service::routes::build(TopicAppState::new(TopicService::new(TopicRepo::new(client))));
-    
+
+    let routes = topic_service::routes::build(TopicAppState::new(TopicService::new(
+        TopicRepo::new(client),
+    )));
+
     engine::app::run(routes, AppProperties { port: 3000 }).await
 }

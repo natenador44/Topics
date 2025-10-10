@@ -1,12 +1,12 @@
+use axum::Router;
+use axum::response::Response;
+use error_stack::{Report, ResultExt};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
-use axum::response::Response;
-use axum::Router;
-use error_stack::{Report, ResultExt};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::{info, Span};
+use tracing::{Span, info};
 
 pub struct AppProperties {
     pub port: u16,
@@ -25,32 +25,23 @@ pub async fn run(routes: Router, properties: AppProperties) -> AppResult<()> {
     let listener = build_listener(properties.port).await?;
 
     let routes = routes.layer(
-        ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http().on_response(|res: &Response, latency: Duration, _span: &Span| {
-                info!(
-                    "returned {} in {}ms",
-                    res.status(),
-                    latency.as_millis()
-                );
-            })
-    ));
-
+        ServiceBuilder::new().layer(TraceLayer::new_for_http().on_response(
+            |res: &Response, latency: Duration, _span: &Span| {
+                info!("returned {} in {}ms", res.status(), latency.as_millis());
+            },
+        )),
+    );
 
     info!(
         "starting up topic service on port {}",
-        listener
-            .local_addr()
-            .change_context(AppError)?
-            .port()
+        listener.local_addr().change_context(AppError)?.port()
     );
 
     serve_on(listener, routes).await
 }
 
 async fn serve_on(listener: TcpListener, routes: Router) -> AppResult<()> {
-    axum::serve(listener, routes)
-        .await
-        .change_context(AppError)
+    axum::serve(listener, routes).await.change_context(AppError)
 }
 
 async fn build_listener(port: u16) -> AppResult<TcpListener> {
@@ -58,6 +49,6 @@ async fn build_listener(port: u16) -> AppResult<TcpListener> {
         Ipv4Addr::UNSPECIFIED,
         port,
     )))
-        .await
-        .change_context(AppError)
+    .await
+    .change_context(AppError)
 }

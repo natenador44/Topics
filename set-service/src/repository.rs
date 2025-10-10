@@ -1,10 +1,10 @@
+use crate::error::SetRepoError;
+use crate::model::Set;
+use engine::Pagination;
+use engine::id::{SetId, TopicId};
 use error_stack::Report;
 use mongodb::Client;
 use optional_field::Field;
-use engine::id::{SetId, TopicId};
-use engine::Pagination;
-use crate::error::SetRepoError;
-use crate::model::Set;
 
 pub type RepoResult<T> = Result<T, Report<SetRepoError>>;
 pub type OptRepoResult<T> = Result<Option<T>, Report<SetRepoError>>;
@@ -17,7 +17,11 @@ pub struct NewSet {
 
 impl NewSet {
     pub fn new(topic_id: TopicId, name: String, description: Option<String>) -> NewSet {
-        Self { topic_id, name, description }
+        Self {
+            topic_id,
+            name,
+            description,
+        }
     }
 }
 

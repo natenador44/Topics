@@ -1,31 +1,30 @@
-use engine::patch_field_schema;
+use crate::error::SetServiceError;
+use crate::model::Set;
+use crate::service::SetService;
+use crate::state::SetAppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::{Json, Router};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post};
+use axum::{Json, Router};
 use chrono::{DateTime, Utc};
+use engine::Pagination;
+use engine::error::ServiceError;
+use engine::id::{SetId, TopicId};
+use engine::patch_field_schema;
 use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
-use engine::error::ServiceError;
-use engine::id::{SetId, TopicId};
-use engine::Pagination;
-use crate::error::SetServiceError;
-use crate::model::Set;
-use crate::service::SetService;
-use crate::state::SetAppState;
 
-mod responses;
 mod requests;
+mod responses;
 const DEFAULT_SET_PAGE_SIZE: u32 = 10;
 const DEFAULT_ENTITY_PAGE_SIZE: u32 = 10;
 
-const MISSING_RESOURCE_RESPONSE_BODY: &str =
-    "The requested set resource does not exist";
+const MISSING_RESOURCE_RESPONSE_BODY: &str = "The requested set resource does not exist";
 
 const SET_ROOT_PATH: &str = "/sets";
 
@@ -38,13 +37,7 @@ const SET_ROOT_PATH: &str = "/sets";
 struct ApiDoc;
 
 #[derive(OpenApi)]
-#[openapi(paths(
-    create_set,
-    get_set,
-    list_sets,
-    delete_set,
-    patch_set,
-))]
+#[openapi(paths(create_set, get_set, list_sets, delete_set, patch_set,))]
 pub struct SetDocs;
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -76,7 +69,7 @@ pub fn routes<S>(app_state: SetAppState) -> OpenApiRouter<S> {
                 .route(GET_SET_PATH, get(get_set))
                 .route(SET_LIST_PATH, get(list_sets))
                 .route(DELETE_SET_PATH, delete(delete_set))
-                .route(PATCH_SET_PATH, patch(patch_set))
+                .route(PATCH_SET_PATH, patch(patch_set)),
         )
         .with_state(app_state)
 }
@@ -143,11 +136,7 @@ async fn create_set(
     Json(set_request): Json<SetRequest>,
 ) -> Result<SetResponse, ServiceError<SetServiceError>> {
     let new_set = service
-        .create(
-            set_id,
-            set_request.name,
-            set_request.description,
-        )
+        .create(set_id, set_request.name, set_request.description)
         .await?;
 
     Ok(SetResponse::created(new_set))
@@ -172,7 +161,9 @@ async fn get_set(
 ) -> Result<Response, ServiceError<SetServiceError>> {
     let set = service.get(set_id).await?;
 
-    let res = set.map(|s| SetResponse::ok(s).into_response()).unwrap_or_else(|| (StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response());
+    let res = set
+        .map(|s| SetResponse::ok(s).into_response())
+        .unwrap_or_else(|| (StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response());
 
     Ok(res)
 }
@@ -213,7 +204,6 @@ async fn list_sets(
     Ok(res)
 }
 
-
 #[utoipa::path(
     delete,
     path = DELETE_SET_PATH,
@@ -232,9 +222,7 @@ async fn delete_set(
 ) -> Result<Response, ServiceError<SetServiceError>> {
     match service.delete(set_id).await? {
         Some(_) => Ok(StatusCode::NO_CONTENT.into_response()),
-        None => {
-            Ok((StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response())
-        }
+        None => Ok((StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response()),
     }
 }
 

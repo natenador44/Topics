@@ -1,12 +1,23 @@
-
-mod responses;
 mod requests;
-use engine::{patch_field_schema, Pagination};
+mod responses;
+use engine::{Pagination, patch_field_schema};
 use std::fmt::Debug;
 
+use crate::error::TopicServiceError;
+use crate::model::Topic;
+use crate::service::TopicService;
+use crate::state::TopicAppState;
 use axum::routing::patch;
-use axum::{Json, extract::{Path, Query, State}, http::StatusCode, response::{IntoResponse, Response, Result}, routing::{delete, get, post}, Router};
+use axum::{
+    Json, Router,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response, Result},
+    routing::{delete, get, post},
+};
 use chrono::{DateTime, Utc};
+use engine::error::ServiceError;
+use engine::id::TopicId;
 use optional_field::{Field, serde_optional_fields};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
@@ -15,12 +26,6 @@ use utoipa::ToSchema;
 use utoipa::schema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
-use engine::error::ServiceError;
-use engine::id::TopicId;
-use crate::error::TopicServiceError;
-use crate::model::Topic;
-use crate::service::TopicService;
-use crate::state::TopicAppState;
 
 const TOPIC_ROOT_PATH: &str = "/topics";
 
@@ -76,13 +81,14 @@ pub fn build(app_state: TopicAppState) -> Router {
 
 fn routes<S>(app_state: TopicAppState) -> OpenApiRouter<S> {
     OpenApiRouter::new()
-        .nest(TOPIC_ROOT_PATH,
-              OpenApiRouter::new()
-                  .route(TOPIC_LIST_PATH, get(list_topics))
-                  .route(TOPIC_GET_PATH, get(get_topic))
-                  .route(TOPIC_CREATE_PATH, post(create_topic))
-                  .route(TOPIC_DELETE_PATH, delete(delete_topic))
-                  .route(TOPIC_PATCH_PATH, patch(patch_topic))
+        .nest(
+            TOPIC_ROOT_PATH,
+            OpenApiRouter::new()
+                .route(TOPIC_LIST_PATH, get(list_topics))
+                .route(TOPIC_GET_PATH, get(get_topic))
+                .route(TOPIC_CREATE_PATH, post(create_topic))
+                .route(TOPIC_DELETE_PATH, delete(delete_topic))
+                .route(TOPIC_PATCH_PATH, patch(patch_topic)),
         )
         .with_state(app_state)
 }

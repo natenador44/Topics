@@ -1,5 +1,5 @@
-use axum::extract::FromRef;
 use crate::service::EntityService;
+use axum::extract::FromRef;
 
 #[derive(Clone)]
 pub struct EntityAppState {

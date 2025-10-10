@@ -3271,33 +3271,24 @@ name = "topic-service"
 version = "0.1.0"
 dependencies = [
  "axum",
- "axum-extra",
- "axum-streams",
  "axum-test",
  "chrono",
- "const_format",
  "engine",
  "error-stack",
  "futures",
- "itertools",
  "mockall",
  "mongodb",
  "optional-field",
  "rstest",
  "serde",
- "serde_json",
  "testcontainers-modules",
  "thiserror 2.0.17",
  "tokio",
- "tokio-stream",
- "tower",
- "tower-http",
  "tracing",
  "tracing-subscriber",
  "utoipa",
  "utoipa-axum",
  "utoipa-swagger-ui",
- "uuid",
 ]
 
 [[package]]

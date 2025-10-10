@@ -1,9 +1,9 @@
-use std::marker::PhantomData;
-use std::time::Duration;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum_streams::StreamBodyAs;
 use serde::Serialize;
+use std::marker::PhantomData;
+use std::time::Duration;
 use tokio_stream::StreamExt;
 
 /// Can be used as the return type of an endpoint where

@@ -1,12 +1,12 @@
+use crate::error::EntityServiceError;
+use crate::model::Entity;
+use crate::repository::{EntityPatch, EntityRepo, NewEntity};
+use crate::{OptServiceResult, ServiceResult};
+use engine::Pagination;
+use engine::id::{EntityId, SetId, TopicId};
 use error_stack::ResultExt;
 use serde_json::Value;
-use engine::Pagination;
 use tracing::instrument;
-use engine::id::{EntityId, SetId, TopicId};
-use crate::{OptServiceResult, ServiceResult};
-use crate::error::EntityServiceError;
-use crate::model::{Entity};
-use crate::repository::{NewEntity, EntityPatch, EntityRepo};
 
 #[derive(Debug, Clone)]
 pub struct EntityService {
@@ -19,19 +19,11 @@ impl EntityService {
     }
 
     #[instrument(skip_all, name = "service#get")]
-    pub async fn get(
-        &self,
-        id: EntityId,
-    ) -> OptServiceResult<Entity> {
-        self.repo
-            .get(id).await
-            .change_context(EntityServiceError)
+    pub async fn get(&self, id: EntityId) -> OptServiceResult<Entity> {
+        self.repo.get(id).await.change_context(EntityServiceError)
     }
 
-    pub async fn list(
-        &self,
-        pagination: Pagination,
-    ) -> ServiceResult<Vec<Entity>> {
+    pub async fn list(&self, pagination: Pagination) -> ServiceResult<Vec<Entity>> {
         self.repo
             .list(pagination)
             .await
@@ -63,7 +55,7 @@ impl EntityService {
     pub async fn patch(
         &self,
         entity_id: EntityId,
-        payload: Option<Value>
+        payload: Option<Value>,
     ) -> OptServiceResult<Entity> {
         self.repo
             .patch(entity_id, EntityPatch::new(payload))

@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
-use std::ops::Deref;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
+use std::ops::Deref;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Copy, Clone)]
