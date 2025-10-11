@@ -37,7 +37,7 @@ async fn try_main() -> AppResult<()> {
 
     let routes = topics_routes().await?;
 
-    engine::app::run(routes, AppProperties { port: 3000 }).await
+    engine::app::run(routes, AppProperties { port: 3001 }).await
 }
 
 #[cfg(feature = "mongo-topic-repo")]

@@ -18,3 +18,19 @@ services:
       ME_CONFIG_BASICAUTH_ENABLED: true
       ME_CONFIG_BASICAUTH_USERNAME: mongoexpressuser
       ME_CONFIG_BASICAUTH_PASSWORD: mongoexpresspass
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
+    network_mode: host
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    network_mode: host
+    restart: always
+    ports:
+      - 3000:3000
