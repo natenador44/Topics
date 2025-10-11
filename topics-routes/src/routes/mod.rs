@@ -13,7 +13,6 @@ use axum::{
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
 };
-use axum_prometheus::PrometheusMetricLayer;
 use chrono::{DateTime, Utc};
 use engine::error::ServiceError;
 use engine::list_criteria::SearchFilter;
