@@ -3,6 +3,8 @@ mod responses;
 use crate::error::TopicServiceError;
 use crate::service::TopicService;
 use crate::state::TopicAppState;
+use axum::extract::{MatchedPath, Request};
+use axum::middleware::{self, Next};
 use axum::routing::patch;
 use axum::{
     Json, Router,
@@ -16,10 +18,12 @@ use chrono::{DateTime, Utc};
 use engine::error::ServiceError;
 use engine::list_criteria::SearchFilter;
 use engine::{Pagination, patch_field_schema};
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use optional_field::{Field, serde_optional_fields};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use tokio::time::Instant;
 use topics_core::{Topic, TopicEngine, TopicFilter, TopicId};
 use tracing::{info, instrument};
 use utoipa::OpenApi;
@@ -81,7 +85,7 @@ pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
 }
 
 fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
-    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+    let metrics_recorder = setup_metrics_recorder();
 
     OpenApiRouter::new()
         .nest(
@@ -92,10 +96,53 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
                 .route(TOPIC_CREATE_PATH, post(create_topic))
                 .route(TOPIC_DELETE_PATH, delete(delete_topic))
                 .route(TOPIC_PATCH_PATH, patch(patch_topic))
-                .route("/metrics", get(|| async move { metric_handle.render() }))
-                .layer(prometheus_layer),
+                .route("/metrics", get(|| async move { metrics_recorder.render() }))
+                .route_layer(middleware::from_fn(track_http_metrics)),
         )
         .with_state(app_state)
+}
+
+fn setup_metrics_recorder() -> PrometheusHandle {
+    const EXPONENTIAL_SECONDS: &[f64] = &[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
+
+    PrometheusBuilder::new()
+        .set_buckets_for_metric(
+            Matcher::Full("http_requests_duration_seconds".to_string()),
+            EXPONENTIAL_SECONDS,
+        )
+        .unwrap()
+        .install_recorder()
+        .unwrap()
+}
+
+async fn track_http_metrics(req: Request, next: Next) -> impl IntoResponse {
+    let start = Instant::now();
+    // TODO figure out what "matched path" is
+    let path = if let Some(matched_path) = req.extensions().get::<MatchedPath>() {
+        matched_path.as_str().to_owned()
+    } else {
+        req.uri().path().to_owned()
+    };
+
+    let method = req.method().clone();
+
+    let response = next.run(req).await;
+
+    let latency = start.elapsed().as_secs_f64();
+    let status = response.status().as_u16().to_string();
+
+    let labels = [
+        ("method", method.to_string()),
+        ("path", path),
+        ("status", status),
+    ];
+
+    let counter = metrics::counter!("http_requests_total", &labels);
+    counter.increment(1);
+
+    let histogram = metrics::histogram!("http_requests_duration_seconds", &labels);
+    histogram.record(latency);
+    response
 }
 
 #[derive(Debug, Serialize, ToSchema)]
