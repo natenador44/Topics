@@ -11,6 +11,7 @@ use axum::{
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
 };
+use axum_prometheus::PrometheusMetricLayer;
 use chrono::{DateTime, Utc};
 use engine::error::ServiceError;
 use engine::list_criteria::SearchFilter;
@@ -80,6 +81,8 @@ pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
 }
 
 fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
     OpenApiRouter::new()
         .nest(
             TOPIC_ROOT_PATH,
@@ -88,7 +91,9 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
                 .route(TOPIC_GET_PATH, get(get_topic))
                 .route(TOPIC_CREATE_PATH, post(create_topic))
                 .route(TOPIC_DELETE_PATH, delete(delete_topic))
-                .route(TOPIC_PATCH_PATH, patch(patch_topic)),
+                .route(TOPIC_PATCH_PATH, patch(patch_topic))
+                .route("/metrics", get(|| async move { metric_handle.render() }))
+                .layer(prometheus_layer),
         )
         .with_state(app_state)
 }

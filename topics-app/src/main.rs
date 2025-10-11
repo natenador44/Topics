@@ -1,10 +1,11 @@
 use axum::Router;
+use dotenv::dotenv;
 use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
 use topics_core::TopicRepository;
 use topics_routes::service::TopicService;
 use topics_routes::state::TopicAppState;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, fmt};
@@ -29,6 +30,10 @@ fn init_logging() {
 
 async fn try_main() -> AppResult<()> {
     init_logging();
+
+    if let Err(e) = dotenv() {
+        warn!("failed to load .env file: {e}");
+    }
 
     let routes = topics_routes().await?;
 

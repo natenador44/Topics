@@ -5,8 +5,8 @@ services:
     ports:
       - 27017:27017
     environment:
-      MONGO_INITDB_ROOT_USERNAME: topics
-      MONGO_INITDB_ROOT_PASSWORD: password1
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASS}
 
   mongo-express:
     image: mongo-express
