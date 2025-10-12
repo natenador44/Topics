@@ -1,10 +1,9 @@
-mod requests;
-mod responses;
 use crate::error::TopicServiceError;
+use crate::metrics;
+use crate::routes::requests::TopicPatchRequest;
 use crate::service::TopicService;
 use crate::state::TopicAppState;
-use axum::extract::{MatchedPath, Request};
-use axum::middleware::{self, Next};
+use axum::middleware::{self};
 use axum::routing::patch;
 use axum::{
     Json, Router,
@@ -13,24 +12,25 @@ use axum::{
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
 };
-use chrono::{DateTime, Utc};
+use engine::Pagination;
 use engine::error::ServiceError;
-use engine::list_criteria::SearchFilter;
+use engine::list_criteria::ListFilter;
 use engine::stream::StreamingResponse;
-use engine::{Pagination, patch_field_schema};
-use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
-use optional_field::{Field, serde_optional_fields};
+use requests::CreateTopicRequest;
+use responses::TopicResponse;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::marker::PhantomData;
-use tokio::time::Instant;
-use topics_core::{Topic, TopicEngine, TopicFilter, TopicId};
-use tracing::{debug, info, instrument};
+use topics_core::TopicEngine;
+use topics_core::list_filter::TopicFilter;
+use topics_core::model::Topic;
+use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa::ToSchema;
-use utoipa::schema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
+
+mod requests;
+mod responses;
 
 const TOPIC_ROOT_PATH: &str = "/topics";
 
@@ -45,29 +45,6 @@ struct ApiDoc;
 #[derive(OpenApi)]
 #[openapi(paths(list_topics, get_topic, create_topic, delete_topic, patch_topic,))]
 struct TopicDocs;
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct TopicRequest {
-    name: String,
-    description: Option<String>,
-}
-
-#[serde_optional_fields]
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct TopicPatchRequest {
-    /// The new name of the topic. Cannot be null. If set to null or not specified, no update will happen.
-    name: Option<String>,
-    /// The new description of the topic. Can be null. If specified as null, the description will update to null.
-    /// If not specified, no update will happen.
-    #[schema(schema_with = patch_field_schema)]
-    description: Field<String>,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct TopicSearch {
-    name: Option<String>,
-    description: Option<String>,
-}
 
 const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u64 = 25;
 
@@ -86,7 +63,7 @@ pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
 }
 
 fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
-    let metrics_recorder = setup_metrics_recorder();
+    let metrics_recorder = metrics::setup_recorder();
 
     OpenApiRouter::new()
         .nest(
@@ -98,130 +75,14 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
                 .route(TOPIC_DELETE_PATH, delete(delete_topic))
                 .route(TOPIC_PATCH_PATH, patch(patch_topic))
                 .route("/metrics", get(|| async move { metrics_recorder.render() }))
-                .route_layer(middleware::from_fn(track_http_metrics)),
+                .route_layer(middleware::from_fn(metrics::track_http)),
         )
         .with_state(app_state)
 }
 
-fn setup_metrics_recorder() -> PrometheusHandle {
-    const EXPONENTIAL_SECONDS: &[f64] = &[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
-
-    const REQ_RES_BUCKETS: &[f64] = &[128.0, 256.0, 512.0, 1024.0, 2048.0, 4096.0, 8192.0, 16384.0];
-
-    PrometheusBuilder::new()
-        .set_buckets_for_metric(
-            Matcher::Full("http_requests_duration_seconds".to_string()),
-            EXPONENTIAL_SECONDS,
-        )
-        .unwrap()
-        .set_buckets_for_metric(
-            Matcher::Full("http_request_size".to_string()),
-            REQ_RES_BUCKETS,
-        )
-        .unwrap()
-        .install_recorder()
-        .unwrap()
-}
-
-async fn track_http_metrics(req: Request, next: Next) -> impl IntoResponse {
-    // TODO figure out what "matched path" is
-    let path = if let Some(matched_path) = req.extensions().get::<MatchedPath>() {
-        matched_path.as_str().to_owned()
-    } else {
-        req.uri().path().to_owned()
-    };
-
-    if path.ends_with("metrics") {
-        return next.run(req).await;
-    }
-
-    let method = req.method().clone();
-
-    let req_size = req
-        .headers()
-        .get("Content-Length")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<usize>().ok());
-
-    if let Some(req_size) = req_size {
-        metrics::histogram!("http_request_size").record(req_size as f64);
-    }
-
-    let start = Instant::now();
-    let response = next.run(req).await;
-
-    let latency = start.elapsed().as_secs_f64();
-    let status = response.status().as_u16().to_string();
-
-    let req_size = response
-        .headers()
-        .get("Content-Length")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<usize>().ok());
-
-    if let Some(req_size) = req_size {
-        metrics::histogram!("http_request_size").record(req_size as f64);
-    }
-
-    let labels = [
-        ("method", method.to_string()),
-        ("path", path),
-        ("status", status),
-    ];
-
-    metrics::counter!("http_requests_total", &labels).increment(1);
-
-    let histogram = metrics::histogram!("http_requests_duration_seconds", &labels);
-    histogram.record(latency);
-    response
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-struct TopicResponse<T> {
-    #[serde(skip)]
-    status_code: StatusCode,
-    id: T,
-    name: String,
-    description: Option<String>,
-    created: DateTime<Utc>,
-    updated: Option<DateTime<Utc>>,
-    #[serde(skip)]
-    _phantom: PhantomData<T>,
-}
-
-impl<T> TopicResponse<T> {
-    fn ok(topic: Topic<T>) -> Self {
-        Self {
-            status_code: StatusCode::OK,
-            id: topic.id,
-            name: topic.name,
-            description: topic.description,
-            created: topic.created,
-            updated: topic.updated,
-            _phantom: PhantomData,
-        }
-    }
-
-    fn created(topic: Topic<T>) -> Self {
-        Self {
-            status_code: StatusCode::CREATED,
-            id: topic.id,
-            name: topic.name,
-            description: topic.description,
-            created: topic.created,
-            updated: topic.updated,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: TopicId> IntoResponse for TopicResponse<T> {
-    fn into_response(self) -> Response {
-        (self.status_code, Json(self)).into_response()
-    }
-}
-
 #[derive(Debug, ToSchema, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
+/// The type of the ID that identifies a Topic.
+/// This changes depending on how the app is configured.
 struct IdType;
 
 type ResponseType = Topic<IdType>;
@@ -259,7 +120,6 @@ where
     let res = if topics.is_empty() {
         StatusCode::NO_CONTENT.into_response()
     } else {
-        metrics::counter!("topics_retrieved").increment(topics.len() as u64);
         StreamingResponse::new(topics.into_iter().map(TopicResponse::ok)).into_response()
     };
     Ok(res)
@@ -289,10 +149,7 @@ where
     let topic = service.get(topic_id).await?;
 
     Ok(topic
-        .map(|t| {
-            metrics::counter!("topics_retrieved").increment(1);
-            TopicResponse::ok(t).into_response()
-        })
+        .map(|t| TopicResponse::ok(t).into_response())
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
@@ -303,19 +160,17 @@ where
     responses(
         (status = CREATED, description = "A topic was successfully created", body = TopicResponse<IdType>),
     ),
-    request_body = TopicRequest
+    request_body = CreateTopicRequest
 )]
 #[instrument(skip_all, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
 async fn create_topic<T>(
     State(service): State<TopicService<T>>,
-    Json(topic): Json<TopicRequest>,
+    Json(topic): Json<CreateTopicRequest>,
 ) -> Result<TopicResponse<T::TopicId>, ServiceError<TopicServiceError>>
 where
     T: TopicEngine,
 {
     let new_topic = service.create(topic.name, topic.description).await?;
-
-    metrics::counter!("num_topics_created").increment(1);
 
     Ok(TopicResponse::created(new_topic))
 }
@@ -340,10 +195,7 @@ where
     T: TopicEngine,
 {
     match service.delete(topic_id).await? {
-        Some(_) => {
-            metrics::counter!("num_topics_deleted").increment(1);
-            Ok(StatusCode::NO_CONTENT)
-        }
+        Some(_) => Ok(StatusCode::NO_CONTENT),
         None => Ok(StatusCode::NOT_FOUND),
     }
 }
@@ -378,9 +230,6 @@ where
         .await?;
 
     Ok(updated_topic
-        .map(|t| {
-            metrics::counter!("num_topics_patched").increment(1);
-            Json(t).into_response()
-        })
+        .map(|t| TopicResponse::ok(t).into_response())
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }

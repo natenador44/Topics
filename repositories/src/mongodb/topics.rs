@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use tokio_stream::StreamExt;
-use topics_core::{
-    NewTopic, OptRepoResult, PatchTopic, RepoResult, Topic, TopicListCriteria, TopicRepoError,
-    TopicRepository,
-};
+use topics_core::TopicRepository;
+use topics_core::list_filter::TopicListCriteria;
+use topics_core::model::{NewTopic, PatchTopic, Topic};
+use topics_core::result::{OptRepoResult, RepoResult, TopicRepoError};
 use tracing::debug;
 use utoipa::ToSchema;
 

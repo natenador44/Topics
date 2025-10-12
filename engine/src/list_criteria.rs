@@ -22,7 +22,7 @@ impl Tag {
     const NONE: MaxFilterCountType = 0;
 }
 
-pub trait SearchFilter {
+pub trait ListFilter {
     const MAX_FILTER_COUNT: usize;
     type Criteria;
     fn tag(&self) -> Tag;
@@ -93,7 +93,7 @@ struct SearchCriteriaInner<T, const N: usize> {
 
 impl<T, const N: usize> ListCriteria<T, N>
 where
-    T: SearchFilter,
+    T: ListFilter,
 {
     pub fn add(&mut self, filter: T) -> &mut Self {
         let filters = self
@@ -174,7 +174,7 @@ mod tests {
         Test3,
     }
 
-    impl SearchFilter for TestSearch {
+    impl ListFilter for TestSearch {
         const MAX_FILTER_COUNT: usize = 3;
         type Criteria = ListCriteria<Self, { Self::MAX_FILTER_COUNT }>;
 

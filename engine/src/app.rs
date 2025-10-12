@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::{Span, info};
+use tracing::{Span, info, instrument};
 
 pub struct AppProperties {
     pub port: u16,
@@ -21,6 +21,7 @@ pub type AppResult<T> = Result<T, Report<AppError>>;
 // TODO need to split out a lot of this functionality to different crates if I keep
 // common stuff like this... feels weird to stuff everything into "engine"
 
+#[instrument(skip_all, fields(port = properties.port), err(Debug))]
 pub async fn run(routes: Router, properties: AppProperties) -> AppResult<()> {
     let listener = build_listener(properties.port).await?;
 

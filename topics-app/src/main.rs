@@ -2,10 +2,11 @@ use axum::Router;
 use dotenv::dotenv;
 use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
+use repositories::mongodb::topics::TopicRepo;
 use topics_core::TopicRepository;
 use topics_routes::service::TopicService;
 use topics_routes::state::TopicAppState;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, fmt};
@@ -35,25 +36,34 @@ async fn try_main() -> AppResult<()> {
         warn!("failed to load .env file: {e}");
     }
 
-    let routes = topics_routes().await?;
+    let routes = build_routes().await?;
 
     engine::app::run(routes, AppProperties { port: 3001 }).await
 }
 
+async fn build_routes() -> AppResult<Router> {
+    let engine = build_repo().await?;
+
+    debug!("building routes..");
+    Ok(topics_routes::routes::build(TopicAppState::new(
+        TopicService::new(TopicEngine::new(engine)),
+    )))
+    .inspect(|_| debug!("routes built"))
+}
+
 #[cfg(feature = "mongo-topic-repo")]
-async fn topics_routes() -> AppResult<Router> {
+#[instrument]
+async fn build_repo() -> AppResult<TopicRepo> {
     use repositories::mongodb::topics::{ConnectionDetails, TopicRepo};
 
     let db_connection_str = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
         "mongodb://admin:password@127.0.0.1:27017/?authSource=admin".to_string()
     });
 
-    let repo = TopicRepo::init(ConnectionDetails::Url(db_connection_str))
+    debug!("initializing mongodb repository");
+    TopicRepo::init(ConnectionDetails::Url(db_connection_str))
         .await
-        .change_context(AppError)?;
-    Ok(topics_routes::routes::build(TopicAppState::new(
-        TopicService::new(TopicEngine::new(repo)),
-    )))
+        .change_context(AppError)
 }
 
 #[derive(Debug, Clone)]

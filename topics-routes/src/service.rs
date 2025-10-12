@@ -1,8 +1,11 @@
 use crate::error::TopicServiceError;
+use crate::metrics;
 use crate::{OptServiceResult, ServiceResult};
 use error_stack::ResultExt;
 use optional_field::Field;
-use topics_core::{NewTopic, PatchTopic, Topic, TopicEngine, TopicListCriteria, TopicRepository};
+use topics_core::list_filter::TopicListCriteria;
+use topics_core::model::{NewTopic, PatchTopic, Topic};
+use topics_core::{TopicEngine, TopicRepository};
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -21,22 +24,31 @@ where
 
     #[instrument(skip_all, name = "service#get")]
     pub async fn get(&self, id: T::TopicId) -> OptServiceResult<Topic<T::TopicId>> {
-        self.engine
+        let topic = self
+            .engine
             .repo()
             .get(id)
             .await
-            .change_context(TopicServiceError)
+            .change_context(TopicServiceError)?;
+
+        metrics::increment_topics_retrieved();
+
+        Ok(topic)
     }
 
     pub async fn list(
         &self,
         list_criteria: TopicListCriteria,
     ) -> ServiceResult<Vec<Topic<T::TopicId>>> {
-        self.engine
+        let topics = self
+            .engine
             .repo()
             .list(list_criteria)
             .await
-            .change_context(TopicServiceError)
+            .change_context(TopicServiceError)?;
+
+        metrics::increment_topics_retrieved_by(topics.len());
+        Ok(topics)
     }
 
     #[instrument(skip_all, name = "service#create")]
@@ -45,20 +57,29 @@ where
         name: String,
         description: Option<String>,
     ) -> ServiceResult<Topic<T::TopicId>> {
-        self.engine
+        let topic = self
+            .engine
             .repo()
             .create(NewTopic::new(name, description))
             .await
-            .change_context(TopicServiceError)
+            .change_context(TopicServiceError)?;
+
+        metrics::increment_topics_created();
+        Ok(topic)
     }
 
     #[instrument(skip_all, name = "service#delete")]
     pub async fn delete(&self, topic_id: T::TopicId) -> ServiceResult<Option<()>> {
-        self.engine
+        let deleted = self
+            .engine
             .repo()
             .delete(topic_id)
             .await
-            .change_context(TopicServiceError)
+            .change_context(TopicServiceError)?;
+
+        metrics::increment_topics_deleted();
+
+        Ok(deleted)
     }
 
     #[instrument(skip_all, name = "service#update")]
@@ -68,10 +89,14 @@ where
         name: Option<String>,
         description: Field<String>,
     ) -> OptServiceResult<Topic<T::TopicId>> {
-        self.engine
+        let topic = self
+            .engine
             .repo()
             .patch(topic_id, PatchTopic::new(name, description))
             .await
-            .change_context(TopicServiceError)
+            .change_context(TopicServiceError)?;
+
+        metrics::increment_topics_patched();
+        Ok(topic)
     }
 }
