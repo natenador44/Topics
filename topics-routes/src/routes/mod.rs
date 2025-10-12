@@ -16,6 +16,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use engine::error::ServiceError;
 use engine::list_criteria::SearchFilter;
+use engine::stream::StreamingResponse;
 use engine::{Pagination, patch_field_schema};
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use optional_field::{Field, serde_optional_fields};
@@ -24,7 +25,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use tokio::time::Instant;
 use topics_core::{Topic, TopicEngine, TopicFilter, TopicId};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 use utoipa::OpenApi;
 use utoipa::ToSchema;
 use utoipa::schema;
@@ -67,6 +68,7 @@ pub struct TopicSearch {
     name: Option<String>,
     description: Option<String>,
 }
+
 const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u64 = 25;
 
 const TOPIC_LIST_PATH: &str = "/";
@@ -104,10 +106,17 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
 fn setup_metrics_recorder() -> PrometheusHandle {
     const EXPONENTIAL_SECONDS: &[f64] = &[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
 
+    const REQ_RES_BUCKETS: &[f64] = &[128.0, 256.0, 512.0, 1024.0, 2048.0, 4096.0, 8192.0, 16384.0];
+
     PrometheusBuilder::new()
         .set_buckets_for_metric(
             Matcher::Full("http_requests_duration_seconds".to_string()),
             EXPONENTIAL_SECONDS,
+        )
+        .unwrap()
+        .set_buckets_for_metric(
+            Matcher::Full("http_request_size".to_string()),
+            REQ_RES_BUCKETS,
         )
         .unwrap()
         .install_recorder()
@@ -115,7 +124,6 @@ fn setup_metrics_recorder() -> PrometheusHandle {
 }
 
 async fn track_http_metrics(req: Request, next: Next) -> impl IntoResponse {
-    let start = Instant::now();
     // TODO figure out what "matched path" is
     let path = if let Some(matched_path) = req.extensions().get::<MatchedPath>() {
         matched_path.as_str().to_owned()
@@ -123,12 +131,37 @@ async fn track_http_metrics(req: Request, next: Next) -> impl IntoResponse {
         req.uri().path().to_owned()
     };
 
+    if path.ends_with("metrics") {
+        return next.run(req).await;
+    }
+
     let method = req.method().clone();
 
+    let req_size = req
+        .headers()
+        .get("Content-Length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok());
+
+    if let Some(req_size) = req_size {
+        metrics::histogram!("http_request_size").record(req_size as f64);
+    }
+
+    let start = Instant::now();
     let response = next.run(req).await;
 
     let latency = start.elapsed().as_secs_f64();
     let status = response.status().as_u16().to_string();
+
+    let req_size = response
+        .headers()
+        .get("Content-Length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok());
+
+    if let Some(req_size) = req_size {
+        metrics::histogram!("http_request_size").record(req_size as f64);
+    }
 
     let labels = [
         ("method", method.to_string()),
@@ -136,8 +169,7 @@ async fn track_http_metrics(req: Request, next: Next) -> impl IntoResponse {
         ("status", status),
     ];
 
-    let counter = metrics::counter!("http_requests_total", &labels);
-    counter.increment(1);
+    metrics::counter!("http_requests_total", &labels).increment(1);
 
     let histogram = metrics::histogram!("http_requests_duration_seconds", &labels);
     histogram.record(latency);
@@ -227,7 +259,8 @@ where
     let res = if topics.is_empty() {
         StatusCode::NO_CONTENT.into_response()
     } else {
-        Json(topics).into_response()
+        metrics::counter!("topics_retrieved").increment(topics.len() as u64);
+        StreamingResponse::new(topics.into_iter().map(TopicResponse::ok)).into_response()
     };
     Ok(res)
 }
@@ -256,7 +289,10 @@ where
     let topic = service.get(topic_id).await?;
 
     Ok(topic
-        .map(|t| TopicResponse::ok(t).into_response())
+        .map(|t| {
+            metrics::counter!("topics_retrieved").increment(1);
+            TopicResponse::ok(t).into_response()
+        })
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
 
@@ -278,10 +314,13 @@ where
     T: TopicEngine,
 {
     let new_topic = service.create(topic.name, topic.description).await?;
+
+    metrics::counter!("num_topics_created").increment(1);
+
     Ok(TopicResponse::created(new_topic))
 }
 
-/// Delete the topic associated with the given id
+// Delete the topic associated with the given id
 #[utoipa::path(
     delete,
     path = TOPIC_DELETE_PATH,
@@ -301,7 +340,10 @@ where
     T: TopicEngine,
 {
     match service.delete(topic_id).await? {
-        Some(_) => Ok(StatusCode::NO_CONTENT),
+        Some(_) => {
+            metrics::counter!("num_topics_deleted").increment(1);
+            Ok(StatusCode::NO_CONTENT)
+        }
         None => Ok(StatusCode::NOT_FOUND),
     }
 }
@@ -336,6 +378,9 @@ where
         .await?;
 
     Ok(updated_topic
-        .map(|t| Json(t).into_response())
+        .map(|t| {
+            metrics::counter!("num_topics_patched").increment(1);
+            Json(t).into_response()
+        })
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
 }
