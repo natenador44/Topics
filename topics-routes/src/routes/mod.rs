@@ -1,7 +1,7 @@
 use crate::error::TopicServiceError;
 use crate::metrics;
 use crate::routes::requests::TopicPatchRequest;
-use crate::service::TopicService;
+use crate::service::{TopicCreation, TopicService};
 use crate::state::TopicAppState;
 use axum::middleware::{self};
 use axum::routing::patch;
@@ -11,6 +11,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
+    serve,
 };
 use engine::Pagination;
 use engine::error::ServiceError;
@@ -120,7 +121,7 @@ where
     let res = if topics.is_empty() {
         StatusCode::NO_CONTENT.into_response()
     } else {
-        StreamingResponse::new(topics.into_iter().map(TopicResponse::ok)).into_response()
+        StreamingResponse::ok(topics.into_iter().map(TopicResponse::ok)).into_response()
     };
     Ok(res)
 }
@@ -162,17 +163,40 @@ where
     ),
     request_body = CreateTopicRequest
 )]
-#[instrument(skip_all, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
+#[instrument(skip_all, err(Debug), fields(req.topics_requested = topics.len()))]
 async fn create_topic<T>(
     State(service): State<TopicService<T>>,
-    Json(topic): Json<CreateTopicRequest>,
-) -> Result<TopicResponse<T::TopicId>, ServiceError<TopicServiceError>>
+    Json(mut topics): Json<Vec<CreateTopicRequest>>,
+) -> Result<Response, ServiceError<TopicServiceError>>
 where
     T: TopicEngine,
 {
-    let new_topic = service.create(topic.name, topic.description).await?;
+    match topics.len() {
+        0 => Ok((
+            StatusCode::BAD_REQUEST,
+            "The request body must contain a non-empty array of values",
+        )
+            .into_response()),
+        1 => {
+            let topic = topics.remove(0);
+            let new_topic = service
+                .create(TopicCreation::new(topic.name, topic.description))
+                .await?;
+            Ok(TopicResponse::created(new_topic).into_response())
+        }
+        _ => {
+            let new_topics = service
+                .create_many(
+                    topics
+                        .into_iter()
+                        .map(|t| TopicCreation::new(t.name, t.description)),
+                )
+                .await?;
 
-    Ok(TopicResponse::created(new_topic))
+            // TODO find a way to return the topics themselves
+            Ok(StreamingResponse::created(new_topics).into_response())
+        }
+    }
 }
 
 // Delete the topic associated with the given id

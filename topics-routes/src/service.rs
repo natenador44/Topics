@@ -6,7 +6,18 @@ use optional_field::Field;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::{TopicEngine, TopicRepository};
-use tracing::instrument;
+use tracing::{info, instrument};
+
+pub struct TopicCreation {
+    name: String,
+    description: Option<String>,
+}
+
+impl TopicCreation {
+    pub fn new(name: String, description: Option<String>) -> Self {
+        Self { name, description }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct TopicService<T> {
@@ -31,7 +42,9 @@ where
             .await
             .change_context(TopicServiceError)?;
 
-        metrics::increment_topics_retrieved();
+        if topic.is_some() {
+            metrics::increment_topics_retrieved();
+        }
 
         Ok(topic)
     }
@@ -52,20 +65,34 @@ where
     }
 
     #[instrument(skip_all, name = "service#create")]
-    pub async fn create(
-        &self,
-        name: String,
-        description: Option<String>,
-    ) -> ServiceResult<Topic<T::TopicId>> {
+    pub async fn create(&self, topic: TopicCreation) -> ServiceResult<Topic<T::TopicId>> {
         let topic = self
             .engine
             .repo()
-            .create(NewTopic::new(name, description))
+            .create(NewTopic::new(topic.name, topic.description))
             .await
             .change_context(TopicServiceError)?;
 
+        info!("created topics");
         metrics::increment_topics_created();
         Ok(topic)
+    }
+
+    #[instrument(skip_all, name = "service#create_many")]
+    pub async fn create_many<I>(&self, topics: I) -> ServiceResult<Vec<T::TopicId>>
+    where
+        I: Iterator<Item = TopicCreation> + Send + Sync + 'static,
+    {
+        let topics = self
+            .engine
+            .repo()
+            .create_many(topics.map(|t| NewTopic::new(t.name, t.description)))
+            .await
+            .change_context(TopicServiceError)?;
+
+        info!("created {} topics", topics.len());
+        metrics::increment_topics_created_by(topics.len());
+        Ok(topics)
     }
 
     #[instrument(skip_all, name = "service#delete")]
@@ -77,7 +104,10 @@ where
             .await
             .change_context(TopicServiceError)?;
 
-        metrics::increment_topics_deleted();
+        if deleted.is_some() {
+            info!("deleted topic");
+            metrics::increment_topics_deleted();
+        }
 
         Ok(deleted)
     }
@@ -96,7 +126,9 @@ where
             .await
             .change_context(TopicServiceError)?;
 
-        metrics::increment_topics_patched();
+        if topic.is_some() {
+            metrics::increment_topics_patched();
+        }
         Ok(topic)
     }
 }

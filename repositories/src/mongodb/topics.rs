@@ -2,7 +2,7 @@ use bson::oid::ObjectId;
 use bson::{Bson, Document, doc};
 use chrono::{DateTime, Utc};
 use error_stack::{Report, ResultExt};
-use mongodb::options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument};
+use mongodb::options::{FindOneAndUpdateOptions, FindOptions, InsertManyOptions, ReturnDocument};
 use mongodb::{Client, Database};
 use optional_field::Field;
 use serde::{Deserialize, Serialize, Serializer};
@@ -201,6 +201,24 @@ impl TopicRepository for TopicRepo {
             created: topic.created,
             updated: None,
         })
+    }
+
+    async fn create_many<I>(&self, topics: I) -> RepoResult<Vec<Self::TopicId>>
+    where
+        I: Iterator<Item = NewTopic> + Send + Sync + 'static,
+    {
+        let mut result = self
+            .db
+            .collection::<NewTopicCreated>("topics")
+            .insert_many(topics.map(|t| NewTopicCreated::new(t.name, t.description)))
+            .await
+            .change_context(TopicRepoError::Create)?;
+        debug!("{:?}", result.inserted_ids);
+        let ids = (0..result.inserted_ids.len())
+            .map(|i| result.inserted_ids.remove(&i).expect("index exists as key"))
+            .map(|id| id.as_object_id().map(TopicId).ok_or(TopicRepoError::Create))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(ids)
     }
 
     async fn patch(

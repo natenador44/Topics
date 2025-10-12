@@ -3,6 +3,7 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use tokio::time::Instant;
+use tracing::error;
 
 const TOPICS_RETRIEVED_METRIC_NAME: &'static str = "topics_retrieved";
 const REQUEST_DURATION_METRIC_NAME: &'static str = "http_requests_duration_seconds";
@@ -80,17 +81,50 @@ pub async fn track_http(req: Request, next: Next) -> impl IntoResponse {
 
 #[inline]
 pub fn increment_topics_retrieved() {
-    metrics::counter!(TOPICS_RETRIEVED_METRIC_NAME).increment(1);
+    increment_topics_retrieved_by(1);
 }
 
 #[inline]
+#[cfg(not(target_pointer_width = "64"))]
+pub fn increment_topics_retrieved_by(amt: usize) {
+    match TryInto::<u64>::try_into(amt) {
+        Ok(amt) => {
+            metrics::counter!(TOPICS_RETRIEVED_METRIC_NAME).increment(amt);
+        }
+        Err(e) => {
+            error!("could not increment topics created metric: {e}");
+        }
+    }
+}
+
+#[inline]
+#[cfg(target_pointer_width = "64")]
 pub fn increment_topics_retrieved_by(amt: usize) {
     metrics::counter!(TOPICS_RETRIEVED_METRIC_NAME).increment(amt as u64);
 }
 
 #[inline]
+#[cfg(not(target_pointer_width = "64"))]
+pub fn increment_topics_created_by(amt: usize) {
+    match TryInto::<u64>::try_into(amt) {
+        Ok(amt) => {
+            metrics::counter!(TOPICS_CREATED_METRIC_NAME).increment(amt);
+        }
+        Err(e) => {
+            error!("could not increment topics created metric: {e}");
+        }
+    }
+}
+
+#[inline]
+#[cfg(target_pointer_width = "64")]
+pub fn increment_topics_created_by(amt: usize) {
+    metrics::counter!(TOPICS_CREATED_METRIC_NAME).increment(amt as u64);
+}
+
+#[inline]
 pub fn increment_topics_created() {
-    metrics::counter!(TOPICS_CREATED_METRIC_NAME).increment(1);
+    increment_topics_created_by(1);
 }
 
 #[inline]

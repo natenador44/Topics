@@ -14,6 +14,7 @@ use tokio_stream::StreamExt;
 /// when each element is streamed back to the user.
 #[derive(Debug)]
 pub struct StreamingResponse<T> {
+    status_code: StatusCode,
     stream: StreamBodyAs<'static>,
     _phantom: PhantomData<T>,
 }
@@ -22,26 +23,44 @@ impl<T> StreamingResponse<T>
 where
     T: Serialize + Send + Sync + 'static,
 {
-    pub fn new<I>(iter: I) -> Self
+    pub fn created<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        I::IntoIter: Send + Sync + 'static,
+    {
+        Self::new(StatusCode::CREATED, iter)
+    }
+
+    pub fn ok<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        I::IntoIter: Send + Sync + 'static,
+    {
+        Self::new(StatusCode::CREATED, iter)
+    }
+
+    pub fn new<I>(status_code: StatusCode, iter: I) -> Self
     where
         I: IntoIterator<Item = T>,
         I::IntoIter: Send + Sync + 'static,
     {
         let stream = tokio_stream::iter(iter);
         Self {
+            status_code,
             stream: StreamBodyAs::json_array(stream),
             _phantom: PhantomData,
         }
     }
 
     #[allow(unused)]
-    pub fn with_throttle<I>(iter: I, throttle_mills: u64) -> Self
+    pub fn with_throttle<I>(status_code: StatusCode, iter: I, throttle_mills: u64) -> Self
     where
         I: IntoIterator<Item = T>,
         I::IntoIter: Send + Sync + 'static,
     {
         let stream = tokio_stream::iter(iter).throttle(Duration::from_millis(throttle_mills));
         Self {
+            status_code,
             stream: StreamBodyAs::json_array(stream),
             _phantom: PhantomData,
         }

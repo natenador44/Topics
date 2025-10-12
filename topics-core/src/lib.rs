@@ -36,6 +36,13 @@ pub trait TopicRepository {
         new_topic: NewTopic,
     ) -> impl Future<Output = RepoResult<Topic<Self::TopicId>>> + Send;
 
+    fn create_many<I>(
+        &self,
+        topics: I,
+    ) -> impl Future<Output = RepoResult<Vec<Self::TopicId>>> + Send
+    where
+        I: Iterator<Item = NewTopic> + Send + Sync + 'static;
+
     fn patch(
         &self,
         id: Self::TopicId,
