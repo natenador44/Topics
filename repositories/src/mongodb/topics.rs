@@ -1,19 +1,20 @@
 use bson::oid::ObjectId;
 use bson::{Bson, Document, doc};
 use chrono::{DateTime, Utc};
-use error_stack::{Report, ResultExt};
+use error_stack::{IntoReport, Report, ResultExt};
 use mongodb::options::{FindOneAndUpdateOptions, FindOptions, InsertManyOptions, ReturnDocument};
+use mongodb::results::InsertManyResult;
 use mongodb::{Client, Database};
 use optional_field::Field;
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use tokio_stream::StreamExt;
-use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
-use topics_core::result::{OptRepoResult, RepoResult, TopicRepoError};
-use tracing::debug;
+use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
+use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicRepository};
+use tracing::{debug, error, info, warn};
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
@@ -55,18 +56,18 @@ impl Display for TopicId {
 }
 
 #[derive(Debug, Serialize)]
-struct NewTopicCreated {
-    name: String,
-    description: Option<String>,
+struct NewTopicCreated<'a> {
+    name: &'a str,
+    description: Option<&'a str>,
     created: DateTime<Utc>,
 }
 
-impl NewTopicCreated {
-    fn new(name: String, description: Option<String>) -> Self {
+impl<'a> NewTopicCreated<'a> {
+    fn new(name: &'a str, description: Option<&'a str>, created: DateTime<Utc>) -> Self {
         Self {
             name,
             description,
-            created: Utc::now(),
+            created,
         }
     }
 }
@@ -181,44 +182,95 @@ impl TopicRepository for TopicRepo {
     }
 
     async fn create(&self, new_topic: NewTopic) -> RepoResult<Topic<Self::TopicId>> {
-        let topic = NewTopicCreated::new(new_topic.name, new_topic.description);
-        let result = self
-            .db
-            .collection::<NewTopicCreated>("topics")
-            .insert_one(&topic)
-            .await
-            .change_context(TopicRepoError::Create)?;
+        let created = Utc::now();
+        let result = {
+            // block is here to end the borrow of `new_topic` before we create Topic at the end
+            let topic =
+                NewTopicCreated::new(&new_topic.name, new_topic.description.as_deref(), created);
+            self.db
+                .collection::<NewTopicCreated>("topics")
+                .insert_one(&topic)
+                .await
+                .change_context(TopicRepoError::Create(CreateErrorType::DbError))?
+        };
 
         Ok(Topic {
             id: TopicId::new(
                 result
                     .inserted_id
                     .as_object_id()
-                    .ok_or(TopicRepoError::Create)?,
+                    .ok_or(TopicRepoError::Create(CreateErrorType::DbError))
+                    .attach_with(|| "inserted id for {new_topic:?} was not an ObjectId")?,
             ),
-            name: topic.name,
-            description: topic.description,
-            created: topic.created,
+            name: new_topic.name,
+            description: new_topic.description,
+            created,
             updated: None,
         })
     }
 
-    async fn create_many<I>(&self, topics: I) -> RepoResult<Vec<Self::TopicId>>
-    where
-        I: Iterator<Item = NewTopic> + Send + Sync + 'static,
-    {
+    async fn create_many(
+        &self,
+        mut statuses: Vec<CreateManyTopicStatus<Self::TopicId>>,
+    ) -> RepoResult<Vec<CreateManyTopicStatus<Self::TopicId>>> {
+        let topics = statuses.iter().filter_map(|status| match status {
+            CreateManyTopicStatus::Pending { name, description } => Some(NewTopicCreated::new(
+                name,
+                description.as_deref(),
+                Utc::now(),
+            )),
+            _ => None,
+        });
+
         let mut result = self
             .db
             .collection::<NewTopicCreated>("topics")
-            .insert_many(topics.map(|t| NewTopicCreated::new(t.name, t.description)))
+            .insert_many(topics)
             .await
-            .change_context(TopicRepoError::Create)?;
-        debug!("{:?}", result.inserted_ids);
-        let ids = (0..result.inserted_ids.len())
-            .map(|i| result.inserted_ids.remove(&i).expect("index exists as key"))
-            .map(|id| id.as_object_id().map(TopicId).ok_or(TopicRepoError::Create))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(ids)
+            .change_context(TopicRepoError::Create(CreateErrorType::DbError))?;
+
+        let mut pending_idx = 0;
+        let mut created = 0;
+
+        for status in statuses.iter_mut() {
+            if let CreateManyTopicStatus::Pending { name, description } = status {
+                let Some(id) = result.inserted_ids.remove(&pending_idx) else {
+                    error!("failed to match inserted id to topic status");
+                    return Err(TopicRepoError::Create(CreateErrorType::MatchFailure).into_report());
+                };
+
+                let id = id.as_object_id();
+                let name = std::mem::take(name);
+                let description = description.take();
+
+                match id {
+                    Some(id) => {
+                        *status = CreateManyTopicStatus::Success(Topic::new(
+                            TopicId(id),
+                            name,
+                            description,
+                        ));
+                        created += 1;
+                    }
+                    None => {
+                        error!(
+                            "topic was created but the id given back was not an Object ID: {id:?}"
+                        );
+                        *status = CreateManyTopicStatus::Fail {
+                            topic_name: Some(name),
+                            topic_description: description,
+                            reason: CreateManyFailReason::ServiceError,
+                        }
+                    }
+                }
+
+                pending_idx += 1; // we only sent pending status to the db
+            }
+        }
+
+        debug!("successfully persisted {} new topics", created);
+
+        Ok(statuses)
     }
 
     async fn patch(

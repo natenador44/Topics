@@ -5,15 +5,15 @@ use std::error::Error;
 
 #[derive(thiserror::Error)]
 #[error("there was an error running the endpoint")]
-pub struct ServiceError<T: Error>(Report<T>);
+pub struct EndpointError<T: Error>(Report<T>);
 
-impl<T: Error> std::fmt::Debug for ServiceError<T> {
+impl<T: Error> std::fmt::Debug for EndpointError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<T> From<Report<T>> for ServiceError<T>
+impl<T> From<Report<T>> for EndpointError<T>
 where
     T: Error,
 {
@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<T: Error> IntoResponse for ServiceError<T> {
+impl<T: Error> IntoResponse for EndpointError<T> {
     fn into_response(self) -> axum::response::Response {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }

@@ -9,7 +9,7 @@ use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use engine::Pagination;
-use engine::error::ServiceError;
+use engine::error::EndpointError;
 use engine::id::{SetId, TopicId};
 use engine::patch_field_schema;
 use optional_field::Field;
@@ -134,7 +134,7 @@ async fn create_set(
     State(service): State<SetService>,
     Path(set_id): Path<TopicId>,
     Json(set_request): Json<SetRequest>,
-) -> Result<SetResponse, ServiceError<SetServiceError>> {
+) -> Result<SetResponse, EndpointError<SetServiceError>> {
     let new_set = service
         .create(set_id, set_request.name, set_request.description)
         .await?;
@@ -158,7 +158,7 @@ async fn create_set(
 async fn get_set(
     State(service): State<SetService>,
     Path(set_id): Path<SetId>,
-) -> Result<Response, ServiceError<SetServiceError>> {
+) -> Result<Response, EndpointError<SetServiceError>> {
     let set = service.get(set_id).await?;
 
     let res = set
@@ -193,7 +193,7 @@ async fn get_set(
 async fn list_sets(
     State(service): State<SetService>,
     Query(pagination): Query<Pagination>,
-) -> Result<Response, ServiceError<SetServiceError>> {
+) -> Result<Response, EndpointError<SetServiceError>> {
     let sets = service.list(pagination).await?;
 
     let res = if sets.is_empty() {
@@ -219,7 +219,7 @@ async fn list_sets(
 async fn delete_set(
     State(service): State<SetService>,
     Path(set_id): Path<SetId>,
-) -> Result<Response, ServiceError<SetServiceError>> {
+) -> Result<Response, EndpointError<SetServiceError>> {
     match service.delete(set_id).await? {
         Some(_) => Ok(StatusCode::NO_CONTENT.into_response()),
         None => Ok((StatusCode::NOT_FOUND, MISSING_RESOURCE_RESPONSE_BODY).into_response()),
@@ -254,7 +254,7 @@ async fn patch_set(
     State(service): State<SetService>,
     Path(set_id): Path<SetId>,
     Json(set_patch): Json<SetPatchRequest>,
-) -> axum::response::Result<Response, ServiceError<SetServiceError>> {
+) -> axum::response::Result<Response, EndpointError<SetServiceError>> {
     let updated_set = service
         .patch(set_id, set_patch.name, set_patch.description)
         .await?;

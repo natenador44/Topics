@@ -7,21 +7,16 @@ edition = "2024"
 engine = { path = "../engine" }
 topics-core = { path = "../topics-core" }
 tokio = { workspace = true, features = ["fs"] }
-tokio-stream = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 error-stack = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "uuid"] }
 utoipa-axum = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-chrono = { workspace = true}
 optional-field = { workspace = true }
-mongodb = { workspace = true }
-tracing-subscriber = { workspace = true }
-bson = { version = "2.15.0", features = ["chrono-0_4", "serde_with"] }
-serde_with = { version = "3.15.0", features = ["chrono_0_4"] }
 metrics = "0.24.2"
 metrics-exporter-prometheus = "0.17.2"
 

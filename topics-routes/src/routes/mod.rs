@@ -1,7 +1,8 @@
 use crate::error::TopicServiceError;
 use crate::metrics;
-use crate::routes::requests::TopicPatchRequest;
-use crate::service::{TopicCreation, TopicService};
+use crate::routes::requests::{BulkCreateTopicRequest, TopicPatchRequest};
+use crate::routes::responses::{BulkCreateResponse, TopicError};
+use crate::service::{CreateManyTopic, TopicCreation, TopicService};
 use crate::state::TopicAppState;
 use axum::middleware::{self};
 use axum::routing::patch;
@@ -11,25 +12,27 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
-    serve,
 };
 use engine::Pagination;
-use engine::error::ServiceError;
+use engine::error::EndpointError;
 use engine::list_criteria::ListFilter;
 use engine::stream::StreamingResponse;
 use requests::CreateTopicRequest;
 use responses::TopicResponse;
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use std::fmt::Debug;
-use topics_core::TopicEngine;
+use std::sync::LazyLock;
 use topics_core::list_filter::TopicFilter;
 use topics_core::model::Topic;
+use topics_core::{CreateManyTopicStatus, TopicEngine};
 use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod api_doc;
 mod requests;
 mod responses;
 
@@ -44,7 +47,14 @@ const TOPIC_ROOT_PATH: &str = "/topics";
 struct ApiDoc;
 
 #[derive(OpenApi)]
-#[openapi(paths(list_topics, get_topic, create_topic, delete_topic, patch_topic,))]
+#[openapi(paths(
+    list_topics,
+    get_topic,
+    create_topic,
+    bulk_create_topics,
+    delete_topic,
+    patch_topic,
+))]
 struct TopicDocs;
 
 const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u64 = 25;
@@ -52,6 +62,7 @@ const DEFAULT_TOPIC_SEARCH_PAGE_SIZE: u64 = 25;
 const TOPIC_LIST_PATH: &str = "/";
 const TOPIC_GET_PATH: &str = "/{topic_id}";
 const TOPIC_CREATE_PATH: &str = "/";
+const TOPIC_BULK_CREATE_PATH: &str = "/bulk";
 const TOPIC_DELETE_PATH: &str = "/{topic_id}";
 const TOPIC_PATCH_PATH: &str = "/{topic_id}";
 
@@ -73,6 +84,7 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
                 .route(TOPIC_LIST_PATH, get(list_topics))
                 .route(TOPIC_GET_PATH, get(get_topic))
                 .route(TOPIC_CREATE_PATH, post(create_topic))
+                .route(TOPIC_BULK_CREATE_PATH, post(bulk_create_topics))
                 .route(TOPIC_DELETE_PATH, delete(delete_topic))
                 .route(TOPIC_PATCH_PATH, patch(patch_topic))
                 .route("/metrics", get(|| async move { metrics_recorder.render() }))
@@ -102,11 +114,11 @@ type ResponseType = Topic<IdType>;
         ("page_size" = u32, Query, description = "The max number of topics to return"),
     )
 )]
-#[instrument(skip(service), err(Debug))]
+#[instrument(skip(service), err(Debug), fields(req.page = pagination.page, req.page_size = pagination.page_size))]
 pub async fn list_topics<T>(
     State(service): State<TopicService<T>>,
     Query(pagination): Query<Pagination>,
-) -> Result<Response, ServiceError<TopicServiceError>>
+) -> Result<Response, EndpointError<TopicServiceError>>
 where
     T: TopicEngine + Send + Sync + 'static,
 {
@@ -143,7 +155,7 @@ where
 pub async fn get_topic<T>(
     State(service): State<TopicService<T>>,
     Path(topic_id): Path<T::TopicId>,
-) -> Result<Response, ServiceError<TopicServiceError>>
+) -> Result<Response, EndpointError<TopicServiceError>>
 where
     T: TopicEngine,
 {
@@ -151,7 +163,7 @@ where
 
     Ok(topic
         .map(|t| TopicResponse::ok(t).into_response())
-        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
+        .unwrap_or_else(|| TopicError::not_found().into_response()))
 }
 
 /// Create a new Topic and return its ID
@@ -163,40 +175,71 @@ where
     ),
     request_body = CreateTopicRequest
 )]
-#[instrument(skip_all, err(Debug), fields(req.topics_requested = topics.len()))]
+#[instrument(skip_all, err(Debug), fields(req.name = topic.name, req.description = topic.description))]
 async fn create_topic<T>(
     State(service): State<TopicService<T>>,
-    Json(mut topics): Json<Vec<CreateTopicRequest>>,
-) -> Result<Response, ServiceError<TopicServiceError>>
+    Json(topic): Json<CreateTopicRequest>,
+) -> Result<Response, EndpointError<TopicServiceError>>
 where
     T: TopicEngine,
 {
-    match topics.len() {
-        0 => Ok((
-            StatusCode::BAD_REQUEST,
-            "The request body must contain a non-empty array of values",
-        )
-            .into_response()),
-        1 => {
-            let topic = topics.remove(0);
-            let new_topic = service
-                .create(TopicCreation::new(topic.name, topic.description))
-                .await?;
-            Ok(TopicResponse::created(new_topic).into_response())
-        }
-        _ => {
-            let new_topics = service
-                .create_many(
-                    topics
-                        .into_iter()
-                        .map(|t| TopicCreation::new(t.name, t.description)),
-                )
-                .await?;
+    let new_topic = service
+        .create(TopicCreation::new(topic.name, topic.description))
+        .await?;
+    Ok(TopicResponse::created(new_topic).into_response())
+}
 
-            // TODO find a way to return the topics themselves
-            Ok(StreamingResponse::created(new_topics).into_response())
-        }
+type BuildTopicCreateType = BulkCreateResponse<IdType>;
+
+#[utoipa::path(
+    post,
+    path = TOPIC_BULK_CREATE_PATH,
+    responses(
+        (
+            status = CREATED,
+            description = "All topics were successfully created. The outcomes array will contain all 'Success' types", body = Vec<BuildTopicCreateType>,
+            example = json!(api_doc::examples::create::bulk_all_success()),
+        ),
+        (
+            status = MULTI_STATUS,
+            description = "Some topics were successfully created, some were not. The outcomes array will contain a mix of 'Success' and 'Fail' types, an each 'Fail' outcome will have a failure reason",
+            body = Vec<BuildTopicCreateType>,
+            example = json!(api_doc::examples::create::bulk_mixed_success()),
+        ),
+        (
+            status = UNPROCESSABLE_ENTITY,
+            description = "None of the topics were able to be created. The outcomes array will contain only 'Fail' types with error reasons for each",
+            body = Vec<BuildTopicCreateType>,
+            example = json!(api_doc::examples::create::bulk_no_success()),
+        ),
+        (status = BAD_REQUEST, description = "An empty array was given", body = TopicError),
+    ),
+    request_body = Vec<CreateTopicRequest>
+)]
+#[instrument(skip_all, err(Debug), fields(req.topic_count = topics.len()))]
+/// Create several topics at once, given the array of creation requests given in the request.
+/// The outcomes array returned should contain the results of each request in the order they were received
+async fn bulk_create_topics<T>(
+    State(service): State<TopicService<T>>,
+    Json(topics): Json<Vec<BulkCreateTopicRequest>>,
+) -> Result<Response, EndpointError<TopicServiceError>>
+where
+    T: TopicEngine,
+{
+    if topics.is_empty() {
+        return Ok(TopicError::bad_request("a non-empty array is required").into_response());
     }
+
+    let topics = service
+        .create_many(
+            topics
+                .into_iter()
+                .enumerate()
+                .map(|(i, t)| CreateManyTopic::new(i, t.name, t.description)),
+        )
+        .await?;
+
+    Ok(BulkCreateResponse::new(topics).into_response())
 }
 
 // Delete the topic associated with the given id
@@ -214,13 +257,13 @@ where
 pub async fn delete_topic<T>(
     State(service): State<TopicService<T>>,
     Path(topic_id): Path<T::TopicId>,
-) -> Result<StatusCode, ServiceError<TopicServiceError>>
+) -> Result<Response, EndpointError<TopicServiceError>>
 where
     T: TopicEngine,
 {
     match service.delete(topic_id).await? {
-        Some(_) => Ok(StatusCode::NO_CONTENT),
-        None => Ok(StatusCode::NOT_FOUND),
+        Some(_) => Ok(StatusCode::NO_CONTENT.into_response()),
+        None => Ok(TopicError::not_found().into_response()),
     }
 }
 
@@ -245,7 +288,7 @@ pub async fn patch_topic<T>(
     State(service): State<TopicService<T>>,
     Path(topic_id): Path<T::TopicId>,
     Json(topic): Json<TopicPatchRequest>,
-) -> Result<Response, ServiceError<TopicServiceError>>
+) -> Result<Response, EndpointError<TopicServiceError>>
 where
     T: TopicEngine,
 {
@@ -255,5 +298,5 @@ where
 
     Ok(updated_topic
         .map(|t| TopicResponse::ok(t).into_response())
-        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()))
+        .unwrap_or_else(|| TopicError::not_found().into_response()))
 }

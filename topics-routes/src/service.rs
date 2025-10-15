@@ -5,7 +5,7 @@ use error_stack::ResultExt;
 use optional_field::Field;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
-use topics_core::{TopicEngine, TopicRepository};
+use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicEngine, TopicRepository};
 use tracing::{info, instrument};
 
 pub struct TopicCreation {
@@ -19,15 +19,44 @@ impl TopicCreation {
     }
 }
 
+pub struct CreateManyTopic {
+    index: usize,
+    name: Field<String>,
+    description: Field<String>,
+}
+
+impl CreateManyTopic {
+    pub fn new(index: usize, name: Field<String>, description: Field<String>) -> CreateManyTopic {
+        Self {
+            index,
+            name,
+            description,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TopicService<T> {
     engine: T,
 }
 
+fn initial_bulk_create_outcome<T>(topic: CreateManyTopic) -> CreateManyTopicStatus<T> {
+    match topic.name {
+        Field::Present(Some(n)) => CreateManyTopicStatus::Pending {
+            name: n,
+            description: topic.description.unwrap_present_or(None),
+        },
+        Field::Present(None) | Field::Missing => CreateManyTopicStatus::Fail {
+            topic_name: None,
+            topic_description: topic.description.unwrap_present_or(None),
+            reason: CreateManyFailReason::MissingName,
+        },
+    }
+}
+
 impl<T> TopicService<T>
 where
     T: TopicEngine,
-    T::Repo: TopicRepository,
 {
     pub fn new(engine: T) -> Self {
         TopicService { engine }
@@ -79,20 +108,33 @@ where
     }
 
     #[instrument(skip_all, name = "service#create_many")]
-    pub async fn create_many<I>(&self, topics: I) -> ServiceResult<Vec<T::TopicId>>
+    pub async fn create_many<I>(
+        &self,
+        topics: I,
+    ) -> ServiceResult<Vec<CreateManyTopicStatus<T::TopicId>>>
     where
-        I: Iterator<Item = TopicCreation> + Send + Sync + 'static,
+        I: Iterator<Item = CreateManyTopic> + Send + Sync + 'static,
     {
-        let topics = self
+        let initial_outcomes = topics.map(initial_bulk_create_outcome).collect::<Vec<_>>();
+        let requested_topics_count = initial_outcomes.len();
+
+        let final_outcomes = self
             .engine
             .repo()
-            .create_many(topics.map(|t| NewTopic::new(t.name, t.description)))
+            .create_many(initial_outcomes)
             .await
             .change_context(TopicServiceError)?;
 
-        info!("created {} topics", topics.len());
-        metrics::increment_topics_created_by(topics.len());
-        Ok(topics)
+        info!(
+            "created {} out of {} requested topics",
+            final_outcomes
+                .iter()
+                .filter(|o| matches!(o, CreateManyTopicStatus::Success(_)))
+                .count(),
+            requested_topics_count,
+        );
+        metrics::increment_topics_created_by(final_outcomes.len());
+        Ok(final_outcomes)
     }
 
     #[instrument(skip_all, name = "service#delete")]

@@ -25,3 +25,12 @@ pub struct CreateTopicRequest {
     pub name: String,
     pub description: Option<String>,
 }
+
+#[serde_optional_fields]
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct BulkCreateTopicRequest {
+    #[schema(schema_with = patch_field_schema)]
+    pub name: Field<String>,
+    #[schema(schema_with = patch_field_schema)]
+    pub description: Field<String>,
+}

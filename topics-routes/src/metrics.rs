@@ -3,7 +3,6 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use tokio::time::Instant;
-use tracing::error;
 
 const TOPICS_RETRIEVED_METRIC_NAME: &'static str = "topics_retrieved";
 const REQUEST_DURATION_METRIC_NAME: &'static str = "http_requests_duration_seconds";

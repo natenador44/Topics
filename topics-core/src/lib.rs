@@ -1,8 +1,9 @@
-use engine::list_criteria::ListFilter;
 use list_filter::TopicListCriteria;
 use model::{NewTopic, PatchTopic, Topic};
+use optional_field::Field;
 use result::{OptRepoResult, RepoResult};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use utoipa::ToSchema;
 
@@ -16,6 +17,27 @@ pub trait TopicEngine: Clone + Send + Sync + 'static {
     // type Cache // bound not necessarily from this crate, since this will be common to all services
 
     fn repo(&self) -> Self::Repo;
+}
+
+// more reasons can be added, for example if we end up having restrictions on name or description
+#[derive(Debug, Serialize, ToSchema)]
+pub enum CreateManyFailReason {
+    ServiceError,
+    MissingName,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub enum CreateManyTopicStatus<T> {
+    Pending {
+        name: String,
+        description: Option<String>,
+    },
+    Success(Topic<T>),
+    Fail {
+        topic_name: Option<String>,
+        topic_description: Option<String>,
+        reason: CreateManyFailReason,
+    },
 }
 
 pub trait TopicRepository {
@@ -36,12 +58,10 @@ pub trait TopicRepository {
         new_topic: NewTopic,
     ) -> impl Future<Output = RepoResult<Topic<Self::TopicId>>> + Send;
 
-    fn create_many<I>(
+    fn create_many(
         &self,
-        topics: I,
-    ) -> impl Future<Output = RepoResult<Vec<Self::TopicId>>> + Send
-    where
-        I: Iterator<Item = NewTopic> + Send + Sync + 'static;
+        topics: Vec<CreateManyTopicStatus<Self::TopicId>>,
+    ) -> impl Future<Output = RepoResult<Vec<CreateManyTopicStatus<Self::TopicId>>>> + Send;
 
     fn patch(
         &self,

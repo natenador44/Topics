@@ -3,7 +3,7 @@ services:
     image: mongo
     restart: always
     ports:
-      - 27017:27017
+      - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASS}
@@ -12,7 +12,7 @@ services:
     image: mongo-express
     restart: always
     ports:
-      - 8081:8081
+      - "8081:8081"
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://topics:password1@mongo:27017/
       ME_CONFIG_BASICAUTH_ENABLED: true
@@ -24,7 +24,7 @@ services:
     restart: always
     network_mode: host
     ports:
-      - 9090:9090
+      - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
 
@@ -33,4 +33,4 @@ services:
     network_mode: host
     restart: always
     ports:
-      - 3000:3000
+      - "3000:3000"

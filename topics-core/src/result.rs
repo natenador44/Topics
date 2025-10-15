@@ -9,10 +9,18 @@ pub enum TopicRepoError {
     Get,
     #[error("failed to list topics")]
     List,
-    #[error("failed to create topic")]
-    Create,
+    #[error("failed to create topic: {0}")]
+    Create(CreateErrorType),
     #[error("failed to patch topic")]
     Patch,
     #[error("failed to delete topic")]
     Delete,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CreateErrorType {
+    #[error("unexpected: failed to match on topic status index")]
+    MatchFailure,
+    #[error("database returned with an error")]
+    DbError,
 }
