@@ -3,10 +3,7 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
-use std::str::FromStr;
-use std::sync::Arc;
 use utoipa::ToSchema;
-use utoipa::openapi::Object;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
 #[repr(transparent)]

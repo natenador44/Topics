@@ -2,8 +2,7 @@ use bson::oid::ObjectId;
 use bson::{Bson, Document, doc};
 use chrono::{DateTime, Utc};
 use error_stack::{IntoReport, Report, ResultExt};
-use mongodb::options::{FindOneAndUpdateOptions, FindOptions, InsertManyOptions, ReturnDocument};
-use mongodb::results::InsertManyResult;
+use mongodb::options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument};
 use mongodb::{Client, Database};
 use optional_field::Field;
 use serde::{Deserialize, Serialize, Serializer};
@@ -14,7 +13,7 @@ use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
 use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicRepository};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error};
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
@@ -119,7 +118,16 @@ pub struct TopicRepo {
     db: Database,
 }
 
+const TOPICS_DB_NAME: &str = "topics";
+const TOPICS_COLLECTION_NAME: &str = "topics";
+
 impl TopicRepo {
+    pub fn new(client: Client) -> Self {
+        Self {
+            db: client.database(TOPICS_DB_NAME),
+        }
+    }
+
     pub async fn init(
         connection_details: ConnectionDetails,
     ) -> Result<TopicRepo, Report<ConnectError>> {
@@ -130,7 +138,7 @@ impl TopicRepo {
         };
 
         Ok(Self {
-            db: client.database("topics"),
+            db: client.database(TOPICS_DB_NAME),
         })
     }
 }
@@ -140,7 +148,7 @@ impl TopicRepository for TopicRepo {
 
     async fn get(&self, id: Self::TopicId) -> OptRepoResult<Topic<Self::TopicId>> {
         self.db
-            .collection::<MongoTopic>("topics")
+            .collection::<MongoTopic>(TOPICS_COLLECTION_NAME)
             .find_one(doc! { "_id": id })
             .await
             .change_context(TopicRepoError::Get)
@@ -170,7 +178,7 @@ impl TopicRepository for TopicRepo {
             .build();
 
         self.db
-            .collection::<MongoTopic>("topics")
+            .collection::<MongoTopic>(TOPICS_COLLECTION_NAME)
             .find(Document::default())
             .with_options(options)
             .await
@@ -188,7 +196,7 @@ impl TopicRepository for TopicRepo {
             let topic =
                 NewTopicCreated::new(&new_topic.name, new_topic.description.as_deref(), created);
             self.db
-                .collection::<NewTopicCreated>("topics")
+                .collection::<NewTopicCreated>(TOPICS_COLLECTION_NAME)
                 .insert_one(&topic)
                 .await
                 .change_context(TopicRepoError::Create(CreateErrorType::DbError))?
@@ -224,7 +232,7 @@ impl TopicRepository for TopicRepo {
 
         let mut result = self
             .db
-            .collection::<NewTopicCreated>("topics")
+            .collection::<NewTopicCreated>(TOPICS_COLLECTION_NAME)
             .insert_many(topics)
             .await
             .change_context(TopicRepoError::Create(CreateErrorType::DbError))?;
@@ -303,7 +311,7 @@ impl TopicRepository for TopicRepo {
             .build();
 
         self.db
-            .collection::<MongoTopic>("topics")
+            .collection::<MongoTopic>(TOPICS_COLLECTION_NAME)
             .find_one_and_update(doc! { "_id": id }, doc! { "$set": update_document })
             .with_options(options)
             .await
@@ -314,7 +322,7 @@ impl TopicRepository for TopicRepo {
     async fn delete(&self, id: Self::TopicId) -> OptRepoResult<()> {
         let result = self
             .db
-            .collection::<Topic<Self::TopicId>>("topics")
+            .collection::<Topic<Self::TopicId>>(TOPICS_COLLECTION_NAME)
             .delete_one(doc! { "_id": id })
             .await
             .change_context(TopicRepoError::Delete)?;

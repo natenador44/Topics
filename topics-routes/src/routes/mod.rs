@@ -26,7 +26,7 @@ use std::sync::LazyLock;
 use topics_core::list_filter::TopicFilter;
 use topics_core::model::Topic;
 use topics_core::{CreateManyTopicStatus, TopicEngine};
-use tracing::instrument;
+use tracing::{info, instrument};
 use utoipa::OpenApi;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -74,22 +74,31 @@ pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
     router.merge(SwaggerUi::new("/topics/swagger-ui").url("/topics/api-docs/openapi.json", api))
 }
 
+fn metrics_enabled() -> bool {
+    std::env::var("METRICS_ENABLED").is_ok_and(|s| s.parse().unwrap_or(false))
+}
+
 fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
-    let metrics_recorder = metrics::setup_recorder();
+    let main_router = OpenApiRouter::new()
+        .route(TOPIC_LIST_PATH, get(list_topics))
+        .route(TOPIC_GET_PATH, get(get_topic))
+        .route(TOPIC_CREATE_PATH, post(create_topic))
+        .route(TOPIC_BULK_CREATE_PATH, post(bulk_create_topics))
+        .route(TOPIC_DELETE_PATH, delete(delete_topic))
+        .route(TOPIC_PATCH_PATH, patch(patch_topic));
+
+    let router = if metrics_enabled() {
+        info!("metrics enabled, setting up metrics handler");
+        let metrics_recorder = metrics::setup_recorder();
+        main_router
+            .route("/metrics", get(|| async move { metrics_recorder.render() }))
+            .route_layer(middleware::from_fn(metrics::track_http))
+    } else {
+        main_router
+    };
 
     OpenApiRouter::new()
-        .nest(
-            TOPIC_ROOT_PATH,
-            OpenApiRouter::new()
-                .route(TOPIC_LIST_PATH, get(list_topics))
-                .route(TOPIC_GET_PATH, get(get_topic))
-                .route(TOPIC_CREATE_PATH, post(create_topic))
-                .route(TOPIC_BULK_CREATE_PATH, post(bulk_create_topics))
-                .route(TOPIC_DELETE_PATH, delete(delete_topic))
-                .route(TOPIC_PATCH_PATH, patch(patch_topic))
-                .route("/metrics", get(|| async move { metrics_recorder.render() }))
-                .route_layer(middleware::from_fn(metrics::track_http)),
-        )
+        .nest(TOPIC_ROOT_PATH, router)
         .with_state(app_state)
 }
 

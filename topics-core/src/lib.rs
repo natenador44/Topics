@@ -1,9 +1,7 @@
 use list_filter::TopicListCriteria;
 use model::{NewTopic, PatchTopic, Topic};
-use optional_field::Field;
 use result::{OptRepoResult, RepoResult};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::fmt::Debug;
 use utoipa::ToSchema;
 

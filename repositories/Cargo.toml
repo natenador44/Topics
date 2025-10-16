@@ -14,7 +14,7 @@ optional-field = { workspace = true }
 tracing = { workspace = true }
 topics-core = { path = "../topics-core", optional = true }
 mongodb = { workspace = true, optional = true }
-bson = { version = "2.15.0", features = ["chrono-0_4", "serde_with"], optional = true }
+bson = { version = "2.15.0", features = ["chrono-0_4"], optional = true }
 
 [features]
 default = ["mongodb", "topics"]

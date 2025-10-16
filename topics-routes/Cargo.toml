@@ -19,10 +19,3 @@ utoipa-swagger-ui = { workspace = true }
 optional-field = { workspace = true }
 metrics = "0.24.2"
 metrics-exporter-prometheus = "0.17.2"
-
-[dev-dependencies]
-axum-test = "18.1.0"
-futures = "0.3.31"
-mockall = "0.13.1"
-rstest = "0.26.1"
-testcontainers-modules = { version = "0.13.0", features = ["mongo"] }

@@ -18,3 +18,15 @@ dotenv = "0.15.0"
 [features]
 default = ["mongo-topic-repo"]
 mongo-topic-repo = ["dep:repositories", "repositories/mongodb", "repositories/topics"]
+
+[dev-dependencies]
+axum-test = "18.1.0"
+futures = "0.3.31"
+mockall = "0.13.1"
+rstest = "0.26.1"
+testcontainers-modules = { version = "0.13.0", features = ["mongo"] }
+mongodb = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+bson = { version = "2.15.0", features = ["chrono-0_4"]}
