@@ -20,18 +20,13 @@ impl TopicCreation {
 }
 
 pub struct CreateManyTopic {
-    index: usize,
     name: Field<String>,
     description: Field<String>,
 }
 
 impl CreateManyTopic {
-    pub fn new(index: usize, name: Field<String>, description: Field<String>) -> CreateManyTopic {
-        Self {
-            index,
-            name,
-            description,
-        }
+    pub fn new(name: Field<String>, description: Field<String>) -> CreateManyTopic {
+        Self { name, description }
     }
 }
 

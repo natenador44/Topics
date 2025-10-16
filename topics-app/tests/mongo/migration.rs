@@ -10,42 +10,100 @@ pub struct NewTopicCreated {
 }
 
 impl NewTopicCreated {
-    pub fn new(name: &str, description: Option<&str>) -> Self {
+    pub fn new(name: impl Into<String>, description: Option<impl Into<String>>) -> Self {
         Self {
             name: name.into(),
-            description: description.map(|s| s.to_string()),
+            description: description.map(|s| s.into()),
             created: Utc::now(),
         }
     }
 }
 
-pub async fn sandwich<I>(client: Client, start_fill: usize, middle: I, end_fill: usize)
-where
-    I: IntoIterator<Item = NewTopicCreated> + Send + Sync + 'static,
-{
-    let topics = (0..start_fill)
-        .map(|_| NewTopicCreated::new("start fill", Some("start fill desc")))
-        .chain(middle)
-        .chain((0..end_fill).map(|_| NewTopicCreated::new("end fill", Some("end fill desc"))));
-
-    insert_many(client, topics).await
+#[derive(Default)]
+pub struct Migration {
+    steps: Vec<MigrationStep>,
+    total: usize,
 }
 
-pub async fn start_with_and_fill<I>(client: Client, start_with: I, fill: usize)
-where
-    I: IntoIterator<Item = NewTopicCreated> + Send + Sync + 'static,
-{
-    let topics = start_with
-        .into_iter()
-        .chain((0..fill).map(|_| NewTopicCreated::new("new topic", Some("new description"))));
-
-    insert_many(client, topics).await;
+enum MigrationStep {
+    Fill(usize),
+    FillWith {
+        fill: usize,
+        name: String,
+        description: Option<String>,
+    },
+    Topic(NewTopicCreated),
+    Topics(Vec<NewTopicCreated>),
 }
 
-pub async fn fill(client: Client, num: usize) {
-    let topics = (0..num).map(|_| NewTopicCreated::new("new topic", Some("new desc")));
+impl Migration {
+    /// Use this if you need to insert `fill` amount of topics, but won't be relying on their contents in your test
+    pub fn fill(mut self, fill: usize) -> Self {
+        self.steps.push(MigrationStep::Fill(fill));
+        self.total += fill;
+        self
+    }
 
-    insert_many(client, topics).await;
+    /// Use this if you want to fill in `fill` amount of topics using a specific name and/or description.
+    /// Their contents can reliably be tested against
+    pub fn fill_with(
+        mut self,
+        fill: usize,
+        name: impl Into<String>,
+        description: Option<impl Into<String>>,
+    ) -> Self {
+        self.total += fill;
+        self.steps.push(MigrationStep::FillWith {
+            fill,
+            name: name.into(),
+            description: description.map(Into::into),
+        });
+        self
+    }
+
+    pub fn single(mut self, topic: NewTopicCreated) -> Self {
+        self.total += 1;
+        self.steps.push(MigrationStep::Topic(topic));
+        self
+    }
+
+    pub fn multi<I>(mut self, topics: I) -> Self
+    where
+        I: IntoIterator<Item = NewTopicCreated>,
+    {
+        let topics = topics.into_iter().collect::<Vec<_>>();
+        self.total += topics.len();
+        self.steps.push(MigrationStep::Topics(topics));
+        self
+    }
+
+    pub async fn run(self, client: Client) {
+        let mut topics = Vec::with_capacity(self.total);
+
+        for step in self.steps {
+            match step {
+                MigrationStep::Fill(fill) => {
+                    topics.extend((0..fill).map(|_| generate_filler_topic()))
+                }
+                MigrationStep::FillWith {
+                    fill,
+                    name,
+                    description,
+                } => {
+                    let iter = (0..fill).map(|_| NewTopicCreated::new(&name, description.as_ref()));
+                    topics.extend(iter)
+                }
+                MigrationStep::Topic(new_topic) => topics.extend([new_topic]),
+                MigrationStep::Topics(new_topics) => topics.extend(new_topics),
+            }
+        }
+
+        insert_many(client, topics).await;
+    }
+}
+
+fn generate_filler_topic() -> NewTopicCreated {
+    NewTopicCreated::new("filler topic", Some("filler description"))
 }
 
 async fn insert_many<I>(client: Client, topics: I)

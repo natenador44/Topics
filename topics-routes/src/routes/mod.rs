@@ -243,8 +243,7 @@ where
         .create_many(
             topics
                 .into_iter()
-                .enumerate()
-                .map(|(i, t)| CreateManyTopic::new(i, t.name, t.description)),
+                .map(|t| CreateManyTopic::new(t.name, t.description)),
         )
         .await?;
 

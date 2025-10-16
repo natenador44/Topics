@@ -18,6 +18,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::mongo::migration;
+use crate::mongo::migration::Migration;
 use crate::mongo::migration::NewTopicCreated;
 
 struct TestRuntime {
@@ -49,7 +50,9 @@ int_test!(no_data_no_content => |server: TestServer, _: Client| async move {
 int_test!(
     some_data_ok =>
     |server: TestServer, client: Client| async move {
-        migration::fill(client, 5).await;
+        Migration::default()
+            .fill(5)
+            .run(client).await;
 
         server
             .get("/topics")
@@ -61,7 +64,9 @@ int_test!(
 int_test!(
     list_default_pagination_for_list_is_25 =>
     |server: TestServer, client: Client| async move {
-        migration::fill(client, 100).await;
+        Migration::default()
+            .fill(100)
+            .run(client).await;
 
         let response = server
             .get("/topics")
@@ -76,7 +81,9 @@ int_test!(
 int_test!(
     list_custom_page_size_is_used_if_specified =>
     |server: TestServer, client: Client| async move {
-        migration::fill(client, 100).await;
+        Migration::default()
+            .fill(100)
+            .run(client).await;
 
         let response = server
             .get("/topics?page_size=5")
@@ -92,7 +99,10 @@ int_test!(
     list_default_page_is_1 =>
     |server: TestServer, client: Client| async move {
         let first_topic = NewTopicCreated::new("first", Some("first topic in the database"));
-        migration::start_with_and_fill(client, vec![first_topic.clone()], 99).await;
+        Migration::default()
+            .single(first_topic.clone())
+            .fill(99)
+            .run(client).await;
 
         let response = server
             .get("/topics")
@@ -109,7 +119,11 @@ int_test!(
     list_custom_page_is_used_if_specified =>
     |server: TestServer, client: Client| async move {
         let first_topic = NewTopicCreated::new("second page topic", Some("second page topic desc"));
-        migration::sandwich(client, 25, vec![first_topic.clone()], 24).await;
+        Migration::default()
+            .fill(25)
+            .single(first_topic.clone())
+            .fill(24)
+            .run(client).await;
 
         let response = server
             .get("/topics?page=2")
@@ -118,6 +132,27 @@ int_test!(
         let body: Vec<NewTopicCreated> = response.json();
 
         assert_eq!(25, body.len());
+        assert_eq!(first_topic, body[0]);
+    }
+);
+
+int_test!(
+    list_custom_page_and_page_size_is_used_if_specified =>
+    |server: TestServer, client: Client| async move {
+        let first_topic = NewTopicCreated::new("second page topic", Some("second page topic desc"));
+        Migration::default()
+            .fill(25)
+            .single(first_topic.clone())
+            .fill(24)
+            .run(client).await;
+
+        let response = server
+            .get("/topics?page=6&page_size=5")
+            .await;
+
+        let body: Vec<NewTopicCreated> = response.json();
+
+        assert_eq!(5, body.len());
         assert_eq!(first_topic, body[0]);
     }
 );
