@@ -45,7 +45,7 @@ async fn build_routes() -> AppResult<Router> {
     let engine = build_repo().await?;
 
     debug!("building routes..");
-    Ok(topics_routes::routes::build(TopicAppState::new(TopicEngine::new(engine))))
+    Ok(topics_routes::routes::build(TopicAppState::new_with_metrics(TopicEngine::new(engine))))
     .inspect(|_| debug!("routes built"))
 }
 

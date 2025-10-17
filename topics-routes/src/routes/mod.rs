@@ -72,10 +72,6 @@ pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
     router.merge(SwaggerUi::new("/topics/swagger-ui").url("/topics/api-docs/openapi.json", api))
 }
 
-fn metrics_enabled() -> bool {
-    std::env::var("METRICS_ENABLED").is_ok_and(|s| s.parse().unwrap_or(false))
-}
-
 fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
     let main_router = OpenApiRouter::new()
         .route(TOPIC_LIST_PATH, get(list_topics))
@@ -85,14 +81,16 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
         .route(TOPIC_DELETE_PATH, delete(delete_topic))
         .route(TOPIC_PATCH_PATH, patch(patch_topic));
 
-    let router = if metrics_enabled() {
+    let router = if app_state.metrics_enabled {
         info!("metrics enabled, setting up metrics handler");
         let metrics_recorder = metrics::setup_recorder();
         main_router
             .route("/metrics", get(|| async move { metrics_recorder.render() }))
             .route_layer(middleware::from_fn(metrics::track_http))
     } else {
+        info!("metrics not enabled, setting up service unavailable metrics handler");
         main_router
+            .route("/metrics", get(|| async { (StatusCode::SERVICE_UNAVAILABLE, "Metrics endpoint is disabled. Metrics must be enabled and the service restarted")}))
     };
 
     OpenApiRouter::new()
@@ -303,12 +301,12 @@ where
     let outcome = service
         .patch(topic_id, topic.name, topic.description)
         .await?;
-    
+
     let res = match outcome {
-        PatchOutcome::Success(t) => TopicResponse::ok(t).into_response(), 
+        PatchOutcome::Success(t) => TopicResponse::ok(t).into_response(),
         PatchOutcome::InvalidName => TopicError::unprocessable_entity("name cannot be null").into_response(),
         PatchOutcome::NotFound => TopicError::not_found().into_response(),
     };
-    
+
     Ok(res)
 }

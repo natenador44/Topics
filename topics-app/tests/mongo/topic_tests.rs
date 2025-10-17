@@ -536,7 +536,7 @@ fn init() -> () {
 async fn runtime() -> TestRuntime {
     let container = Mongo::default().start().await.unwrap();
     let client = create_client(&container).await;
-    let routes = topics_routes::routes::build(TopicAppState::new(TestEngine {
+    let routes = topics_routes::routes::build(TopicAppState::new_without_metrics(TestEngine {
         repo: TopicRepo::new(client.clone()),
     }));
 

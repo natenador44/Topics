@@ -3,6 +3,7 @@ use model::{NewTopic, PatchTopic, Topic};
 use result::{OptRepoResult, RepoResult};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use error_stack::Report;
 use utoipa::ToSchema;
 
 pub mod list_filter;
@@ -11,7 +12,7 @@ pub mod result;
 
 pub trait TopicEngine: Clone + Send + Sync + 'static {
     type TopicId: TopicId;
-    type Repo: TopicRepository<TopicId = Self::TopicId> + Send + Sync + 'static;
+    type Repo: TopicRepository<TopicId = Self::TopicId>;
     // type Cache // bound not necessarily from this crate, since this will be common to all services
 
     fn repo(&self) -> Self::Repo;
@@ -38,7 +39,7 @@ pub enum CreateManyTopicStatus<T> {
     },
 }
 
-pub trait TopicRepository {
+pub trait TopicRepository: Send + Sync + Clone + 'static {
     type TopicId: TopicId;
 
     fn get(
