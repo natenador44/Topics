@@ -10,12 +10,12 @@ pub struct TopicAppState<T: TopicEngine> {
 
 impl<T: TopicEngine> TopicAppState<T> {
     pub fn new_with_metrics(engine: T) -> Self {
-        Self { 
+        Self {
             service: TopicService::new(engine),
             metrics_enabled: true,
         }
     }
-    
+
     pub fn new_without_metrics(engine: T) -> Self {
         Self {
             service: TopicService::new(engine),

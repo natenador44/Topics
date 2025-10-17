@@ -1,2 +1,2 @@
-#[cfg(feature = "topics")]
+#[cfg(feature = "mongo-topics")]
 pub mod topics;

@@ -21,9 +21,9 @@ use requests::CreateTopicRequest;
 use responses::TopicResponse;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use topics_core::TopicEngine;
 use topics_core::list_filter::TopicFilter;
 use topics_core::model::Topic;
-use topics_core::TopicEngine;
 use tracing::{info, instrument};
 use utoipa::OpenApi;
 use utoipa::ToSchema;
@@ -304,7 +304,9 @@ where
 
     let res = match outcome {
         PatchOutcome::Success(t) => TopicResponse::ok(t).into_response(),
-        PatchOutcome::InvalidName => TopicError::unprocessable_entity("name cannot be null").into_response(),
+        PatchOutcome::InvalidName => {
+            TopicError::unprocessable_entity("name cannot be null").into_response()
+        }
         PatchOutcome::NotFound => TopicError::not_found().into_response(),
     };
 

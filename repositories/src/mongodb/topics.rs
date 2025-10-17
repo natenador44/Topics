@@ -34,14 +34,6 @@ impl TopicId {
     }
 }
 
-impl Deref for TopicId {
-    type Target = ObjectId;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl From<TopicId> for Bson {
     fn from(value: TopicId) -> Self {
         value.0.into()

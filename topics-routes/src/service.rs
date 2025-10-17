@@ -111,16 +111,20 @@ where
         I: Iterator<Item = CreateManyTopic> + Send + Sync + 'static,
     {
         let mut pending = 0;
-        let initial_outcomes = topics.map(initial_bulk_create_outcome)
-            .inspect(|o|  if matches!(o, CreateManyTopicStatus::Pending { .. }) { pending += 1 })
+        let initial_outcomes = topics
+            .map(initial_bulk_create_outcome)
+            .inspect(|o| {
+                if matches!(o, CreateManyTopicStatus::Pending { .. }) {
+                    pending += 1
+                }
+            })
             .collect::<Vec<_>>();
         let requested_topics_count = initial_outcomes.len();
 
         let final_outcomes = if pending == 0 {
             initial_outcomes
         } else {
-            self
-                .engine
+            self.engine
                 .repo()
                 .create_many(initial_outcomes)
                 .await
@@ -168,10 +172,10 @@ where
             Field::Missing => None,
             Field::Present(None) => {
                 // name cannot be null
-                return Ok(PatchOutcome::InvalidName)
+                return Ok(PatchOutcome::InvalidName);
             }
         };
-        
+
         let topic = self
             .engine
             .repo()
@@ -182,7 +186,9 @@ where
         if topic.is_some() {
             metrics::increment_topics_patched();
         }
-        Ok(topic.map(PatchOutcome::Success).unwrap_or(PatchOutcome::NotFound))
+        Ok(topic
+            .map(PatchOutcome::Success)
+            .unwrap_or(PatchOutcome::NotFound))
     }
 }
 

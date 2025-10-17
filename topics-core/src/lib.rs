@@ -1,9 +1,9 @@
+use error_stack::Report;
 use list_filter::TopicListCriteria;
 use model::{NewTopic, PatchTopic, Topic};
 use result::{OptRepoResult, RepoResult};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use error_stack::Report;
 use utoipa::ToSchema;
 
 pub mod list_filter;

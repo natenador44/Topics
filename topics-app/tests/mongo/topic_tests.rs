@@ -374,7 +374,6 @@ int_test!(
     }
 );
 
-
 int_test!(
     bulk_create_no_success => |server: TestServer, _: Client| async move {
         let req = json!([
@@ -452,7 +451,6 @@ int_test!(
         assert!(result.is_none());
     }
 );
-
 
 int_test!(
     delete_topic_not_found => |server: TestServer, _: Client| async move {

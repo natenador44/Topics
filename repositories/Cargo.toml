@@ -12,11 +12,14 @@ thiserror = { workspace = true }
 tokio-stream = { workspace = true }
 optional-field = { workspace = true }
 tracing = { workspace = true }
+tokio = { workspace = true }
 topics-core = { path = "../topics-core", optional = true }
 mongodb = { workspace = true, optional = true }
 bson = { version = "2.15.0", features = ["chrono-0_4"], optional = true }
+tokio-postgres = { workspace = true, optional = true, features = ["with-uuid-1", "with-chrono-0_4"] }
+uuid = { workspace = true, optional = true }
 
 [features]
-default = ["mongodb", "topics"]
-mongodb = ["dep:mongodb", "dep:bson"]
-topics = ["dep:topics-core"]
+default = ["mongo-topics"]
+mongo-topics = ["dep:mongodb", "dep:topics-core", "dep:bson"]
+postgres-topics = ["dep:tokio-postgres", "dep:topics-core", "dep:uuid"]
