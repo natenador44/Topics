@@ -2,7 +2,7 @@ use crate::error::TopicServiceError;
 use crate::metrics;
 use crate::routes::requests::{BulkCreateTopicRequest, TopicPatchRequest};
 use crate::routes::responses::{BulkCreateResponse, TopicError};
-use crate::service::{CreateManyTopic, TopicCreation, TopicService};
+use crate::service::{CreateManyTopic, PatchOutcome, TopicCreation, TopicService};
 use crate::state::TopicAppState;
 use axum::middleware::{self};
 use axum::routing::patch;
@@ -20,12 +20,10 @@ use engine::stream::StreamingResponse;
 use requests::CreateTopicRequest;
 use responses::TopicResponse;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 use std::fmt::Debug;
-use std::sync::LazyLock;
 use topics_core::list_filter::TopicFilter;
 use topics_core::model::Topic;
-use topics_core::{CreateManyTopicStatus, TopicEngine};
+use topics_core::TopicEngine;
 use tracing::{info, instrument};
 use utoipa::OpenApi;
 use utoipa::ToSchema;
@@ -282,6 +280,7 @@ where
     path = TOPIC_PATCH_PATH,
     responses(
         (status = OK, description = "The topic was successfully patched", body = Topic<IdType>),
+        (status = UNPROCESSABLE_ENTITY, description = "'name' was set to null"),
         (status = NOT_FOUND, description = "The topic was not found so could not be updated"),
     ),
     params(
@@ -290,7 +289,7 @@ where
     request_body = TopicPatchRequest,
 )]
 #[instrument(skip(service, topic), err(Debug), fields(
-    topic.name = topic.name,
+    topic.name = topic.name.as_ref().map_present_or(None, |d| Some(d.map(String::as_str).unwrap_or("null"))),
     topic.desc = topic.description.as_ref().map_present_or(None, |d| Some(d.map(String::as_str).unwrap_or("null"))),
 ))]
 pub async fn patch_topic<T>(
@@ -301,11 +300,15 @@ pub async fn patch_topic<T>(
 where
     T: TopicEngine,
 {
-    let updated_topic = service
+    let outcome = service
         .patch(topic_id, topic.name, topic.description)
         .await?;
-
-    Ok(updated_topic
-        .map(|t| TopicResponse::ok(t).into_response())
-        .unwrap_or_else(|| TopicError::not_found().into_response()))
+    
+    let res = match outcome {
+        PatchOutcome::Success(t) => TopicResponse::ok(t).into_response(), 
+        PatchOutcome::InvalidName => TopicError::unprocessable_entity("name cannot be null").into_response(),
+        PatchOutcome::NotFound => TopicError::not_found().into_response(),
+    };
+    
+    Ok(res)
 }

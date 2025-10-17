@@ -110,15 +110,22 @@ where
     where
         I: Iterator<Item = CreateManyTopic> + Send + Sync + 'static,
     {
-        let initial_outcomes = topics.map(initial_bulk_create_outcome).collect::<Vec<_>>();
+        let mut pending = 0;
+        let initial_outcomes = topics.map(initial_bulk_create_outcome)
+            .inspect(|o|  if matches!(o, CreateManyTopicStatus::Pending { .. }) { pending += 1 })
+            .collect::<Vec<_>>();
         let requested_topics_count = initial_outcomes.len();
 
-        let final_outcomes = self
-            .engine
-            .repo()
-            .create_many(initial_outcomes)
-            .await
-            .change_context(TopicServiceError)?;
+        let final_outcomes = if pending == 0 {
+            initial_outcomes
+        } else {
+            self
+                .engine
+                .repo()
+                .create_many(initial_outcomes)
+                .await
+                .change_context(TopicServiceError)?
+        };
 
         info!(
             "created {} out of {} requested topics",
@@ -153,9 +160,18 @@ where
     pub async fn patch(
         &self,
         topic_id: T::TopicId,
-        name: Option<String>,
+        name: Field<String>,
         description: Field<String>,
-    ) -> OptServiceResult<Topic<T::TopicId>> {
+    ) -> ServiceResult<PatchOutcome<T::TopicId>> {
+        let name = match name {
+            Field::Present(Some(n)) => Some(n),
+            Field::Missing => None,
+            Field::Present(None) => {
+                // name cannot be null
+                return Ok(PatchOutcome::InvalidName)
+            }
+        };
+        
         let topic = self
             .engine
             .repo()
@@ -166,6 +182,12 @@ where
         if topic.is_some() {
             metrics::increment_topics_patched();
         }
-        Ok(topic)
+        Ok(topic.map(PatchOutcome::Success).unwrap_or(PatchOutcome::NotFound))
     }
+}
+
+pub enum PatchOutcome<T> {
+    Success(Topic<T>),
+    InvalidName,
+    NotFound,
 }

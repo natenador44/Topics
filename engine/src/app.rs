@@ -1,7 +1,6 @@
 use axum::Router;
 use axum::response::Response;
 use error_stack::{Report, ResultExt};
-use std::borrow::Cow;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
 use tokio::net::TcpListener;

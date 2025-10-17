@@ -106,6 +106,10 @@ impl TopicError<()> {
     pub fn bad_request(message: impl Into<ErrorMessageType>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, message.into(), None)
     }
+
+    pub fn unprocessable_entity(message: impl Into<ErrorMessageType>) -> Self {
+        Self::new(StatusCode::UNPROCESSABLE_ENTITY, message.into(), None)
+    }
 }
 
 impl<T: Serialize> TopicError<T> {

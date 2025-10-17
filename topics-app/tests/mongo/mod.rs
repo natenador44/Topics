@@ -1,2 +1,2 @@
 mod migration;
-mod tests;
+mod topic_tests;

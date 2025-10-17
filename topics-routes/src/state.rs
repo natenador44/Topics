@@ -8,8 +8,8 @@ pub struct TopicAppState<T: TopicEngine> {
 }
 
 impl<T: TopicEngine> TopicAppState<T> {
-    pub fn new(service: TopicService<T>) -> Self {
-        Self { service }
+    pub fn new(engine: T) -> Self {
+        Self { service: TopicService::new(engine) }
     }
 }
 

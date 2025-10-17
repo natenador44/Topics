@@ -1,5 +1,6 @@
 use axum_test::TestServer;
 use axum_test::http::StatusCode;
+use bson::doc;
 use bson::oid::ObjectId;
 use mongodb::Client;
 use repositories::mongodb::topics::TopicRepo;
@@ -12,7 +13,6 @@ use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use topics_core::TopicEngine;
 use topics_core::TopicRepository;
 use topics_core::model::Topic;
-use topics_routes::service::TopicService;
 use topics_routes::state::TopicAppState;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::Layer;
@@ -66,11 +66,7 @@ int_test!(
             .await
             .json();
 
-        assert_eq!(expected.id, actual.id);
-        assert_eq!(expected.name, actual.name);
-        assert_eq!(expected.description, actual.description);
-        assert_eq!(expected.created, actual.created);
-        assert_eq!(expected.updated, actual.updated);
+        assert_topic_fields_eq(expected, actual);
     }
 );
 
@@ -109,7 +105,7 @@ int_test!(list_no_data_no_content => |server: TestServer, _: Client| async move 
 });
 
 int_test!(
-    some_data_ok =>
+    list_some_data_ok =>
     |server: TestServer, client: Client| async move {
         Migration::default()
             .fill(5)
@@ -280,6 +276,256 @@ int_test!(
     }
 );
 
+int_test!(
+    bulk_create_empty_array_bad_request => |server: TestServer, _: Client| async move {
+        server.post("/topics/bulk")
+            .json(&json!([]))
+            .await
+            .assert_status_bad_request();
+    }
+);
+
+int_test!(
+    bulk_create_all_success => |server: TestServer, _: Client| async move {
+        let req = json!([
+            { "name": "test topic", "description": "test desc" },
+            { "name": "test topic 2", "description": null },
+            { "name": "test topic 3" },
+        ]);
+
+        let res = server.post("/topics/bulk")
+            .json(&req)
+            .await;
+
+        res.assert_status(StatusCode::CREATED);
+        res.assert_json_contains(&json!({
+            "created": 3,
+            "failed": 0,
+            "outcomes": [
+                {
+                    "Success": {
+                        "name": "test topic",
+                        "description": "test desc",
+                    }
+                },
+                {
+                    "Success": {
+                        "name": "test topic 2",
+                        "description": null,
+                    }
+                },
+                {
+                    "Success": {
+                        "name": "test topic 3",
+                        "description": null,
+                    }
+                }
+            ]
+        }));
+    }
+);
+
+int_test!(
+    bulk_create_mixed_success => |server: TestServer, _: Client| async move {
+        let req = json!([
+            { "name": "test topic", "description": "test desc" },
+            { "name": "test topic 2", "description": null },
+            { "name": null, "description": "test desc" },
+            {},
+        ]);
+
+        let res = server.post("/topics/bulk")
+            .json(&req)
+            .await;
+
+        res.assert_status(StatusCode::MULTI_STATUS);
+        res.assert_json_contains(&json!({
+            "created": 2,
+            "failed": 2,
+            "outcomes": [
+                {
+                    "Success": {
+                        "name": "test topic",
+                        "description": "test desc",
+                    }
+                },
+                {
+                    "Success": {
+                        "name": "test topic 2",
+                        "description": null,
+                    }
+                },
+                {
+                    "Fail": {
+                        "topic_name": null,
+                        "topic_description": "test desc",
+                        "reason": "MissingName"
+                    }
+                },
+                {
+                    "Fail": {
+                        "topic_name": null,
+                        "topic_description": null,
+                        "reason": "MissingName"
+                    }
+                }
+            ]
+        }));
+    }
+);
+
+
+int_test!(
+    bulk_create_no_success => |server: TestServer, _: Client| async move {
+        let req = json!([
+            { "name": null, "description": "test desc" },
+            { "description": "test desc" },
+            {}
+        ]);
+
+        let res = server.post("/topics/bulk")
+            .json(&req)
+            .await;
+
+        res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+        res.assert_json_contains(&json!({
+            "created": 0,
+            "failed": 3,
+            "outcomes": [
+                {
+                    "Fail": {
+                        "topic_name": null,
+                        "topic_description": "test desc",
+                        "reason": "MissingName"
+                    }
+                },
+                {
+                    "Fail": {
+                        "topic_name": null,
+                        "topic_description": "test desc",
+                        "reason": "MissingName"
+                    }
+                },
+                {
+                    "Fail": {
+                        "topic_name": null,
+                        "topic_description": null,
+                        "reason": "MissingName"
+                    }
+                },
+            ]
+        }));
+    }
+);
+
+int_test!(
+    delete_success => |server: TestServer, client: Client| async move {
+        let topic = NewTopicCreated::new("first topic", Some("first topic desc"));
+        let ids = Migration::default()
+            .single(topic)
+            .run(client.clone())
+            .await;
+
+        let id = ids[0];
+
+        let collection = client
+            .database("topics")
+            .collection::<Value>("topics");
+
+        let result = collection
+            .find_one(doc! { "_id": id })
+            .await
+            .unwrap();
+
+        assert!(result.is_some());
+
+        let res = server.delete(&format!("/topics/{id}"))
+            .await;
+
+        res.assert_status(StatusCode::NO_CONTENT);
+
+        let result = collection
+            .find_one(doc! { "_id": id })
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+);
+
+
+int_test!(
+    delete_topic_not_found => |server: TestServer, _: Client| async move {
+        let id = ObjectId::new();
+
+        let res = server.delete(&format!("/topics/{id}"))
+            .await;
+
+        res.assert_status_not_found();
+    }
+);
+
+int_test!(
+    patch_topic_success => |server: TestServer, client: Client| async move {
+        let topic = NewTopicCreated::new("first topic", Some("first topic desc"));
+        let ids = Migration::default()
+            .single(topic.clone())
+            .run(client.clone())
+            .await;
+
+        let id = ids[0];
+
+        let res = server
+            .patch(&format!("/topics/{id}"))
+            .json(&json!({ "name": "new name", "description": "new description"}))
+            .await;
+
+        res.assert_status_ok();
+
+        let actual: Topic<ObjectId> = res.json();
+        let expected = Topic::new(id, "new name".to_string(), Some("new description".to_string()), topic.created, None);
+
+        assert_eq!(expected.id, actual.id);
+        assert_eq!(expected.name, actual.name);
+        assert_eq!(expected.description, actual.description);
+        assert_eq!(expected.created, actual.created);
+        assert!(actual.updated.is_some());
+    }
+);
+
+int_test!(
+    patch_topic_not_found => |server: TestServer, _: Client| async move {
+        let id = ObjectId::new();
+
+        server.patch(&format!("/topics/{id}"))
+            .json(&json!({ "name": "new name", "description": "new description"}))
+            .await
+            .assert_status_not_found();
+    }
+);
+
+int_test!(
+    patch_topic_name_set_to_null => |server: TestServer, client: Client| async move {
+        let id = Migration::default()
+            .single(NewTopicCreated::new("first topic", Some("first topic desc")))
+            .run(client)
+            .await[0];
+
+        server.patch(&format!("/topics/{id}"))
+            .json(&json!({ "name": null, "description": "new description"}))
+            .await
+            .assert_status_unprocessable_entity();
+    }
+);
+
+fn assert_topic_fields_eq(expected: Topic<ObjectId>, actual: Topic<ObjectId>) {
+    assert_eq!(expected.id, actual.id);
+    assert_eq!(expected.name, actual.name);
+    assert_eq!(expected.description, actual.description);
+    assert_eq!(expected.created, actual.created);
+    assert_eq!(expected.updated, actual.updated);
+}
+
 #[fixture]
 #[once]
 fn init() -> () {
@@ -290,9 +536,9 @@ fn init() -> () {
 async fn runtime() -> TestRuntime {
     let container = Mongo::default().start().await.unwrap();
     let client = create_client(&container).await;
-    let routes = topics_routes::routes::build(TopicAppState::new(TopicService::new(TestEngine {
+    let routes = topics_routes::routes::build(TopicAppState::new(TestEngine {
         repo: TopicRepo::new(client.clone()),
-    })));
+    }));
 
     TestRuntime {
         _container: container,
