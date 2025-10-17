@@ -35,13 +35,23 @@ pub struct Topic<T> {
 }
 
 impl<T> Topic<T> {
-    pub fn new(id: T, name: String, description: Option<String>) -> Self {
+    pub fn create(id: T, name: String, description: Option<String>) -> Self {
+        Self::new(id, name, description, Utc::now(), None)
+    }
+
+    pub fn new(
+        id: T,
+        name: String,
+        description: Option<String>,
+        created: DateTime<Utc>,
+        updated: Option<DateTime<Utc>>,
+    ) -> Self {
         Self {
             id,
             name,
             description,
-            created: Utc::now(),
-            updated: None,
+            created,
+            updated,
         }
     }
 }

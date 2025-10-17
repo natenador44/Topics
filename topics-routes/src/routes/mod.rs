@@ -181,6 +181,7 @@ where
     path = TOPIC_CREATE_PATH,
     responses(
         (status = CREATED, description = "A topic was successfully created", body = TopicResponse<IdType>),
+        (status = UNPROCESSABLE_ENTITY, description = "The name in the request was null"),
     ),
     request_body = CreateTopicRequest
 )]

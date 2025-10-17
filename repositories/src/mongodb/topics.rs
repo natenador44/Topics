@@ -253,7 +253,7 @@ impl TopicRepository for TopicRepo {
 
                 match id {
                     Some(id) => {
-                        *status = CreateManyTopicStatus::Success(Topic::new(
+                        *status = CreateManyTopicStatus::Success(Topic::create(
                             TopicId(id),
                             name,
                             description,

@@ -1,14 +1,17 @@
 use axum_test::TestServer;
 use axum_test::http::StatusCode;
+use bson::oid::ObjectId;
 use mongodb::Client;
 use repositories::mongodb::topics::TopicRepo;
 use rstest::{fixture, rstest};
 use serde_json::Value;
+use serde_json::json;
 use testcontainers_modules::mongo::Mongo;
 use testcontainers_modules::testcontainers::ContainerAsync;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use topics_core::TopicEngine;
 use topics_core::TopicRepository;
+use topics_core::model::Topic;
 use topics_routes::service::TopicService;
 use topics_routes::state::TopicAppState;
 use tracing::level_filters::LevelFilter;
@@ -17,7 +20,6 @@ use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::mongo::migration;
 use crate::mongo::migration::Migration;
 use crate::mongo::migration::NewTopicCreated;
 
@@ -40,7 +42,66 @@ macro_rules! int_test {
     };
 }
 
-int_test!(no_data_no_content => |server: TestServer, _: Client| async move {
+int_test!(get_no_content_not_found => |server: TestServer, _: Client| async move {
+    let id = ObjectId::new();
+    server
+        .get(&format!("/topics/{id}"))
+        .await
+        .assert_status_not_found();
+});
+
+int_test!(
+    get_after_insert_finds_topic => |server: TestServer, client: Client| async move {
+        let topic = NewTopicCreated::new("t1", Some("desc"));
+        let ids = Migration::default()
+            .single(topic.clone())
+            .run(client)
+            .await;
+
+        let id = ids[0];
+
+        let expected = Topic::new(id, topic.name, topic.description, topic.created, None);
+
+        let actual: Topic<ObjectId> = server.get(&format!("/topics/{id}"))
+            .await
+            .json();
+
+        assert_eq!(expected.id, actual.id);
+        assert_eq!(expected.name, actual.name);
+        assert_eq!(expected.description, actual.description);
+        assert_eq!(expected.created, actual.created);
+        assert_eq!(expected.updated, actual.updated);
+    }
+);
+
+int_test!(
+    get_non_existent_id_not_found => |server: TestServer, client: Client| async move {
+        Migration::default()
+            .fill(50)
+            .run(client)
+            .await;
+
+        let unknown_id = ObjectId::new();
+
+        server.get(&format!("/topics/{unknown_id}"))
+            .await
+            .assert_status_not_found();
+
+    }
+);
+
+// ideally this would be an unprocessable entity, but can work on that later
+int_test!(
+    get_bad_id_not_found => |server: TestServer, _: Client| async move {
+        let bad_id = "badid";
+
+        server.get(&format!("/topic/{bad_id}"))
+            .await
+            .assert_status_not_found();
+    }
+);
+
+int_test!(list_no_data_no_content => |server: TestServer, _: Client| async move {
     server
         .get("/topics")
         .await
@@ -154,6 +215,68 @@ int_test!(
 
         assert_eq!(5, body.len());
         assert_eq!(first_topic, body[0]);
+    }
+);
+
+int_test!(
+    create_null_name_unprocessable_entity => |server: TestServer, _: Client| async move {
+        server.post("/topics")
+            .json(&json!({
+                "name": null,
+                "description": "new topic"
+            }))
+            .await
+            .assert_status_unprocessable_entity();
+    }
+);
+
+int_test!(
+    create_success_no_description => |server: TestServer, _: Client| async move {
+        let res = server.post("/topics")
+            .json(&json!({
+                "name": "test topic",
+                "description": null
+            }))
+            .await;
+
+        res.assert_status(StatusCode::CREATED);
+        let topic: Topic<ObjectId> = res.json();
+
+        assert_eq!("test topic", &topic.name);
+        assert!(topic.description.is_none());
+    }
+);
+
+int_test!(
+    create_success_description => |server: TestServer, _: Client| async move {
+        let res = server.post("/topics")
+            .json(&json!({
+                "name": "test topic",
+                "description": "test desc",
+            }))
+            .await;
+
+        res.assert_status(StatusCode::CREATED);
+        let topic: Topic<ObjectId> = res.json();
+
+        assert_eq!("test topic", &topic.name);
+        assert_eq!(Some("test desc"), topic.description.as_deref());
+    }
+);
+
+int_test!(
+    create_success_updated_is_none => |server: TestServer, _: Client| async move {
+        let res = server.post("/topics")
+            .json(&json!({
+                "name": "test topic",
+                "description": "test desc",
+            }))
+            .await;
+
+        res.assert_status(StatusCode::CREATED);
+        let topic: Topic<ObjectId> = res.json();
+
+        assert!(topic.updated.is_none());
     }
 );
 

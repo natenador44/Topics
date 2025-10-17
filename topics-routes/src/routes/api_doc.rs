@@ -9,12 +9,12 @@ pub mod examples {
         use topics_core::{CreateManyFailReason, CreateManyTopicStatus};
         static BULK_ALL_SUCCESS: LazyLock<Value> = LazyLock::new(|| {
             serde_json::to_value(BulkCreateResponse::new(vec![
-                CreateManyTopicStatus::Success(Topic::new(
+                CreateManyTopicStatus::Success(Topic::create(
                     "some-id1",
                     "example1".to_string(),
                     None,
                 )),
-                CreateManyTopicStatus::Success(Topic::new(
+                CreateManyTopicStatus::Success(Topic::create(
                     "some-id2",
                     "example2".to_string(),
                     None,
@@ -29,7 +29,7 @@ pub mod examples {
 
         static BULK_MIXED_SUCCESS: LazyLock<Value> = LazyLock::new(|| {
             serde_json::to_value(BulkCreateResponse::new(vec![
-                CreateManyTopicStatus::Success(Topic::new(
+                CreateManyTopicStatus::Success(Topic::create(
                     "some-id1",
                     "example1".to_string(),
                     Some("this topic was successfully created".to_string()),

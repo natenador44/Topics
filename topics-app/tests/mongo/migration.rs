@@ -1,12 +1,13 @@
+use bson::oid::ObjectId;
 use chrono::{DateTime, Utc};
 use mongodb::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NewTopicCreated {
-    name: String,
-    description: Option<String>,
-    created: DateTime<Utc>,
+    pub name: String,
+    pub description: Option<String>,
+    pub created: DateTime<Utc>,
 }
 
 impl NewTopicCreated {
@@ -77,7 +78,7 @@ impl Migration {
         self
     }
 
-    pub async fn run(self, client: Client) {
+    pub async fn run(self, client: Client) -> Vec<ObjectId> {
         let mut topics = Vec::with_capacity(self.total);
 
         for step in self.steps {
@@ -98,7 +99,7 @@ impl Migration {
             }
         }
 
-        insert_many(client, topics).await;
+        insert_many(client, topics).await
     }
 }
 
@@ -106,14 +107,19 @@ fn generate_filler_topic() -> NewTopicCreated {
     NewTopicCreated::new("filler topic", Some("filler description"))
 }
 
-async fn insert_many<I>(client: Client, topics: I)
+async fn insert_many<I>(client: Client, topics: I) -> Vec<ObjectId>
 where
     I: IntoIterator<Item = NewTopicCreated>,
 {
-    client
+    let ids = client
         .database("topics")
         .collection::<NewTopicCreated>("topics")
         .insert_many(topics)
         .await
-        .unwrap();
+        .unwrap()
+        .inserted_ids;
+
+    (0..ids.len())
+        .map(|i| ids[&i].as_object_id().unwrap())
+        .collect()
 }
