@@ -13,13 +13,26 @@ tokio-stream = { workspace = true }
 optional-field = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
-topics-core = { path = "../topics-core", optional = true }
+topics-core = { path = "../topics-core" }
 mongodb = { workspace = true, optional = true }
-bson = { version = "2.15.0", features = ["chrono-0_4"], optional = true }
-tokio-postgres = { workspace = true, optional = true, features = ["with-uuid-1", "with-chrono-0_4"] }
-uuid = { workspace = true, optional = true }
+bson = { version = "2.15.0", features = ["chrono-0_4"] }
+tokio-postgres = { workspace = true, features = ["with-uuid-1", "with-chrono-0_4"] }
+uuid = { workspace = true }
+refinery = { version = "0.9.0", features = ["tokio-postgres"] }
+deadpool-postgres = "0.14.1"
 
-[features]
-default = ["mongo-topics"]
-mongo-topics = ["dep:mongodb", "dep:topics-core", "dep:bson"]
-postgres-topics = ["dep:tokio-postgres", "dep:topics-core", "dep:uuid"]
+# [features]
+# default = ["mongo-topics"]
+# mongo-topics = ["dep:mongodb", "dep:topics-core", "dep:bson"]
+# postgres-topics = ["dep:tokio-postgres", "dep:topics-core", "dep:uuid", "dep:refinery"]
+# refinery = ["dep:refinery"]
+
+[dev-dependencies]
+axum-test = "18.1.0"
+futures = "0.3.31"
+rstest = "0.26.1"
+testcontainers-modules = { version = "0.13.0", features = ["postgres"] }
+tokio-postgres = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

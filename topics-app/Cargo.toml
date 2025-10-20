@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-repositories = { path = "../repositories", optional = true }
+repositories = { path = "../repositories" }
 topics-routes = { path = "../topics-routes" }
 topics-core = { path = "../topics-core" }
 engine = { path = "../engine" }
@@ -15,9 +15,9 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenv = "0.15.0"
 
-[features]
-default = ["mongo-topic-repo"]
-mongo-topic-repo = ["dep:repositories", "repositories/mongo-topics"]
+# [features]
+# default = ["mongo-topic-repo"]
+# mongo-topic-repo = ["dep:repositories", "repositories/mongo-topics"]
 
 [dev-dependencies]
 axum-test = "18.1.0"
