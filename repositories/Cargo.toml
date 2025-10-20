@@ -14,7 +14,7 @@ optional-field = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 topics-core = { path = "../topics-core" }
-mongodb = { workspace = true, optional = true }
+mongodb = { workspace = true }
 bson = { version = "2.15.0", features = ["chrono-0_4"] }
 tokio-postgres = { workspace = true, features = ["with-uuid-1", "with-chrono-0_4"] }
 uuid = { workspace = true }

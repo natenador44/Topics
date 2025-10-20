@@ -51,7 +51,6 @@ async fn build_routes() -> AppResult<Router> {
     .inspect(|_| debug!("routes built"))
 }
 
-#[cfg(feature = "mongo-topic-repo")]
 #[instrument]
 async fn build_repo() -> AppResult<TopicRepo> {
     use repositories::mongodb::topics::{ConnectionDetails, TopicRepo};

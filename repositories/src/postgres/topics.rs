@@ -80,6 +80,35 @@ impl TopicRepo {
         })
     }
 
+    pub async fn init_with_pool_size(
+        connection_details: ConnectionDetails,
+        pool_size: usize,
+    ) -> Result<Self, Report<InitErr>> {
+        let config = match connection_details {
+            ConnectionDetails::Url(url) => Config::from_str(&url).change_context(InitErr)?,
+        };
+
+        let mgr_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
+        let mgr = Manager::from_config(config, NoTls, mgr_config);
+        let pool = Pool::builder(mgr)
+            .max_size(pool_size)
+            .build()
+            .change_context(InitErr)?;
+
+        let mut handle = pool.get().await.change_context(InitErr)?;
+
+        let client = &mut *(&mut *handle);
+
+        run_migrations(client).await?;
+
+        Ok(Self {
+            statements: Statements::prepare(client).await.change_context(InitErr)?,
+            pool,
+        })
+    }
+
     async fn client(&self, on_fail: TopicRepoError) -> RepoResult<Object> {
         self.pool.get().await.change_context(on_fail)
     }

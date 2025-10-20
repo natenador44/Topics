@@ -7,7 +7,6 @@ use mongodb::{Client, Database};
 use optional_field::Field;
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
-use std::ops::Deref;
 use tokio_stream::StreamExt;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
