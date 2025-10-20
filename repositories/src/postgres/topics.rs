@@ -13,7 +13,7 @@ use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
 use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicRepository};
-use tracing::error;
+use tracing::{error, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -22,7 +22,7 @@ mod embedded {
     embed_migrations!("./src/postgres/migrations/topics");
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy)]
 #[serde(transparent)]
 pub struct TopicId(Uuid);
 impl TopicId {
@@ -124,6 +124,34 @@ fn row_to_topic(row: Row) -> Topic<TopicId> {
     )
 }
 
+macro_rules! validate_pagination_field {
+    ($field_name:literal, $field:expr) => {
+        if $field > i64::MAX as u64 {
+            return Err(TopicRepoError::List.into_report()).attach_with(|| {
+                format!(
+                    "{} '{}' is too large and is not supported",
+                    $field_name, $field
+                )
+            });
+        } else {
+            $field as i64
+        }
+    };
+
+    ($field_name:literal, $field:expr => $map:expr) => {
+        if $field > i64::MAX as u64 {
+            return Err(TopicRepoError::List.into_report()).attach_with(|| {
+                format!(
+                    "{} '{}' is too large and is not supported",
+                    $field_name, $field
+                )
+            });
+        } else {
+            $map as i64
+        }
+    };
+}
+
 impl TopicRepository for TopicRepo {
     type TopicId = TopicId;
 
@@ -142,18 +170,8 @@ impl TopicRepository for TopicRepo {
         &self,
         list_criteria: TopicListCriteria,
     ) -> RepoResult<Vec<Topic<Self::TopicId>>> {
-        let page = if list_criteria.page() > i64::MAX as u64 {
-            return Err(TopicRepoError::List.into_report()).attach_with(|| {
-                format!(
-                    "page '{}' is too large and is not supported",
-                    list_criteria.page()
-                )
-            });
-        } else {
-            list_criteria.page() as i64
-        };
-
-        let page_size = list_criteria.page_size().min(i64::MAX as u64) as i64;
+        let page = validate_pagination_field!("page", list_criteria.page() => list_criteria.page().saturating_sub(1));
+        let page_size = validate_pagination_field!("page_size", list_criteria.page_size());
 
         let client = self.client(TopicRepoError::List).await?;
 
@@ -183,59 +201,60 @@ impl TopicRepository for TopicRepo {
             .map(row_to_topic)
     }
 
+    // TODO I really don't like how I have this... maybe it's better to allocate more memory to
+    // prevent so much complexity
     async fn create_many(
         &self,
-        mut topics: Vec<CreateManyTopicStatus<Self::TopicId>>,
+        mut create_new_topic_statuses: Vec<CreateManyTopicStatus<Self::TopicId>>,
     ) -> RepoResult<Vec<CreateManyTopicStatus<Self::TopicId>>> {
-        let mut stmt = String::from("insert into topics (id, name, description) values ");
-
-        let mut idxs = Vec::new();
-        let mut params = Vec::new();
-
-        for (i, status) in topics.iter().enumerate() {
-            if let CreateManyTopicStatus::Pending { name, description } = status {
-                if !idxs.is_empty() {
-                    // if we just added a value segment, and we're about to add a new one, we need a comma
-                    stmt.push_str(", ");
-                }
-                let p_count = params.len() * 3;
-                stmt.push_str(&format!(
-                    "(${}, ${}, ${}) ",
-                    p_count + 1,
-                    p_count + 2,
-                    p_count + 3
-                ));
-                params.push((TopicId::new(), name.clone(), description.clone()));
-                idxs.push(i);
-            }
-        }
-
-        let mut p_ref = Vec::with_capacity(params.len());
-
-        for (id, name, desc) in &params {
-            p_ref.push(&id.0 as &(dyn ToSql + Sync));
-            p_ref.push(name as &(dyn ToSql + Sync));
-            p_ref.push(desc as &(dyn ToSql + Sync));
-        }
+        let Some(insert) = generate_create_many_insert(&create_new_topic_statuses) else {
+            warn!(
+                "No statuses in pending status, not creating topics in db. This means the request had errors previously"
+            );
+            return Ok(create_new_topic_statuses);
+        };
 
         let client = self
             .client(TopicRepoError::Create(CreateErrorType::DbError))
             .await?;
 
         let new_topics = client
-            .query_raw(&stmt, p_ref)
+            .query_raw(&insert.query, insert.params())
             .await
             .change_context(TopicRepoError::Create(CreateErrorType::DbError))?
-            .map(|r| {
-                r.map(row_to_topic)
-                    .change_context(TopicRepoError::Create(CreateErrorType::DbError))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .await?;
+            .map(|r| r.map(row_to_topic))
+            .collect::<Vec<_>>()
+            .await;
 
         // go through created topics and match with index (0 == 0, 1, == 1), then update status using that index
 
-        Ok(topics)
+        for (i, topic_result) in new_topics.into_iter().enumerate() {
+            let status_idx = insert.status_indexes_involved[i];
+
+            let Some(status) = create_new_topic_statuses.get_mut(status_idx) else {
+                return Err(TopicRepoError::Create(CreateErrorType::MatchFailure))
+                    .attach_with(|| format!("status idx {status_idx} did not exist"))?;
+            };
+
+            *status = match topic_result {
+                Ok(topic) => CreateManyTopicStatus::Success(topic),
+                Err(e) => {
+                    error!("failed to create topic (status idx: {status_idx}): {e}");
+                    let CreateManyTopicStatus::Pending { name, description } = status else {
+                        return Err(TopicRepoError::Create(CreateErrorType::MatchFailure))
+                            .attach_with(|| format!("status to update was not pending (idx: {status_idx}). this is a bug"))?;
+                    };
+
+                    CreateManyTopicStatus::Fail {
+                        topic_name: Some(std::mem::take(name)),
+                        topic_description: description.take(),
+                        reason: CreateManyFailReason::ServiceError,
+                    }
+                }
+            };
+        }
+
+        Ok(create_new_topic_statuses)
     }
 
     async fn patch(
@@ -264,4 +283,162 @@ async fn create(
         .await
         .change_context(TopicRepoError::Create(CreateErrorType::DbError))
         .map(row_to_topic)
+}
+
+struct CreateManyInsert {
+    status_indexes_involved: Vec<usize>,
+    params: Vec<(TopicId, String, Option<String>)>,
+    query: String,
+}
+
+impl CreateManyInsert {
+    fn builder() -> CreateManyInsertBuilder {
+        CreateManyInsertBuilder {
+            status_indexes_involved: Vec::default(),
+            params: Vec::default(),
+        }
+    }
+
+    fn params(&self) -> Vec<&(dyn ToSql + Sync)> {
+        let mut p_ref = Vec::with_capacity(self.params.len());
+
+        for (id, name, desc) in &self.params {
+            p_ref.push(&id.0 as &(dyn ToSql + Sync));
+            p_ref.push(name as &(dyn ToSql + Sync));
+            p_ref.push(desc as &(dyn ToSql + Sync));
+        }
+
+        p_ref
+    }
+}
+
+struct CreateManyInsertBuilder {
+    status_indexes_involved: Vec<usize>,
+    params: Vec<(TopicId, String, Option<String>)>,
+}
+
+impl CreateManyInsertBuilder {
+    fn add_new(&mut self, status_index: usize, name: &str, description: Option<&str>) {
+        self.status_indexes_involved.push(status_index);
+        self.params.push((
+            TopicId::new(),
+            name.to_string(),
+            description.map(|s| s.to_string()),
+        ));
+    }
+
+    fn build(self) -> Option<CreateManyInsert> {
+        if self.params.is_empty() {
+            return None;
+        }
+
+        let mut query = String::from("insert into topics (id, name, description) values ");
+        let mut param_count = 0;
+        for (i, (_)) in self.params.iter().enumerate() {
+            query += &format!(
+                "(${}, ${}, ${})",
+                param_count + 1,
+                param_count + 2,
+                param_count + 3
+            );
+
+            if i < self.params.len() - 1 {
+                query += ", ";
+            }
+            param_count += 3;
+        }
+
+        query += " returning id, name, description, created, updated";
+        Some(CreateManyInsert {
+            status_indexes_involved: self.status_indexes_involved,
+            params: self.params,
+            query,
+        })
+    }
+}
+
+fn generate_create_many_insert(
+    statuses: &[CreateManyTopicStatus<TopicId>],
+) -> Option<CreateManyInsert> {
+    let mut builder = CreateManyInsert::builder();
+
+    for (i, status) in statuses.iter().enumerate() {
+        if let CreateManyTopicStatus::Pending { name, description } = status {
+            builder.add_new(i, name, description.as_deref());
+        }
+    }
+
+    builder.build()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::postgres::topics::{TopicId, generate_create_many_insert};
+    use chrono::Utc;
+    use topics_core::model::Topic;
+    use topics_core::{CreateManyFailReason, CreateManyTopicStatus};
+
+    #[test]
+    fn generate_create_many_insert_empty_statuses_returns_none() {
+        assert!(generate_create_many_insert(&[]).is_none())
+    }
+
+    #[test]
+    fn generate_create_many_insert_returns_none_if_no_pending_statuses() {
+        let statuses = vec![
+            CreateManyTopicStatus::Fail {
+                topic_name: None,
+                topic_description: None,
+                reason: CreateManyFailReason::MissingName,
+            },
+            CreateManyTopicStatus::Success(Topic::new(
+                TopicId::new(),
+                "t1".into(),
+                None,
+                Utc::now(),
+                None,
+            )),
+        ];
+
+        assert!(generate_create_many_insert(&statuses).is_none())
+    }
+
+    #[test]
+    fn generate_create_many_insert_creates_insert_for_all_pending_statuses() {
+        let statuses = vec![
+            CreateManyTopicStatus::Fail {
+                topic_name: None,
+                topic_description: None,
+                reason: CreateManyFailReason::MissingName,
+            },
+            CreateManyTopicStatus::Pending {
+                name: "topic2".into(),
+                description: Some("desc2".into()),
+            },
+            CreateManyTopicStatus::Success(Topic::new(
+                TopicId::new(),
+                "t1".into(),
+                None,
+                Utc::now(),
+                None,
+            )),
+            CreateManyTopicStatus::Pending {
+                name: "topic1".into(),
+                description: None,
+            },
+        ];
+
+        let insert = generate_create_many_insert(&statuses).unwrap();
+
+        assert_eq!(2, insert.params.len());
+        assert_eq!("topic2", &insert.params[0].1);
+        assert_eq!(Some("desc2"), insert.params[0].2.as_deref());
+        assert_eq!("topic1", &insert.params[1].1);
+        assert_eq!(None, insert.params[1].2.as_deref());
+
+        let expected_query = "insert into topics (id, name, description) values ($1, $2, $3), ($4, $5, $6) returning id, name, description, created, updated";
+
+        assert_eq!(expected_query, insert.query);
+        assert_eq!(vec![1, 3], insert.status_indexes_involved);
+    }
 }

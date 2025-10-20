@@ -19,13 +19,13 @@ pub trait TopicEngine: Clone + Send + Sync + 'static {
 }
 
 // more reasons can be added, for example if we end up having restrictions on name or description
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, Copy, Clone, PartialEq, Eq)]
 pub enum CreateManyFailReason {
     ServiceError,
     MissingName,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, Clone, PartialEq, Eq)]
 pub enum CreateManyTopicStatus<T> {
     Pending {
         name: String,

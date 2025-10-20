@@ -32,7 +32,7 @@ impl Statements {
                 .change_context(StatementPrepareError)?,
             create: client
                 .prepare_typed(
-                    "insert into topics (id, name, description) values ($1, $2, $3) returning id, name, description, created",
+                    "insert into topics (id, name, description) values ($1, $2, $3) returning id, name, description, created, updated",
                     &[Type::UUID, Type::VARCHAR, Type::VARCHAR],
                 )
                 .await

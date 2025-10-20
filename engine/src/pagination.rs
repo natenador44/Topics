@@ -11,3 +11,19 @@ pub struct Pagination {
     pub page: u64,
     pub page_size: Option<u64>,
 }
+
+impl Pagination {
+    pub fn with_default_page_size(page: u64) -> Self {
+        Self {
+            page,
+            page_size: None,
+        }
+    }
+
+    pub fn with_page_size(page: u64, page_size: u64) -> Self {
+        Self {
+            page,
+            page_size: Some(page_size),
+        }
+    }
+}

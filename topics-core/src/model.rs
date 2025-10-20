@@ -25,7 +25,7 @@ impl PatchTopic {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
 pub struct Topic<T> {
     pub id: T,
     pub name: String,
