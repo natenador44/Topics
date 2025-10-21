@@ -1,4 +1,5 @@
-use crate::postgres::statements::Statements;
+use crate::postgres::statements::TopicStatements;
+use crate::postgres::{ConnectionDetails, RepoInitErr};
 use deadpool_postgres::{Manager, ManagerConfig, Object, Pool, RecyclingMethod};
 use error_stack::{IntoReport, Report, ResultExt};
 use optional_field::Field;
@@ -32,58 +33,61 @@ impl TopicId {
     }
 }
 
-pub enum ConnectionDetails {
-    Url(String),
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("failed to initialize postgres topics repo")]
-pub struct InitErr;
-
 #[derive(Debug, Clone)]
 pub struct TopicRepo {
-    pub(crate) pool: Pool,
-    statements: Statements,
+    pool: Pool,
+    statements: TopicStatements,
 }
 
-async fn run_migrations(client: &mut Client) -> Result<(), Report<InitErr>> {
+async fn run_migrations(client: &mut Client) -> Result<(), Report<RepoInitErr>> {
     embedded::migrations::runner()
         .run_async(client)
         .await
-        .change_context(InitErr)?;
+        .change_context(RepoInitErr::topics())?;
     Ok(())
 }
 
 impl TopicRepo {
-    pub async fn init(connection_details: ConnectionDetails) -> Result<Self, Report<InitErr>> {
-        let config = match connection_details {
-            ConnectionDetails::Url(url) => Config::from_str(&url).change_context(InitErr)?,
-        };
-
-        let mgr_config = ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        };
-        let mgr = Manager::from_config(config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr).build().change_context(InitErr)?;
-
-        let mut handle = pool.get().await.change_context(InitErr)?;
+    pub async fn new(pool: Pool) -> Result<Self, Report<RepoInitErr>> {
+        let mut handle = pool.get().await.change_context(RepoInitErr::topics())?;
 
         let client = &mut *(&mut *handle);
 
         run_migrations(client).await?;
 
         Ok(Self {
-            statements: Statements::prepare(client).await.change_context(InitErr)?,
+            statements: TopicStatements::prepare(client)
+                .await
+                .change_context(RepoInitErr::topics())?,
             pool,
         })
+    }
+    pub async fn init(connection_details: ConnectionDetails) -> Result<Self, Report<RepoInitErr>> {
+        let config = match connection_details {
+            ConnectionDetails::Url(url) => {
+                Config::from_str(&url).change_context(RepoInitErr::topics())?
+            }
+        };
+
+        let mgr_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
+        let mgr = Manager::from_config(config, NoTls, mgr_config);
+        let pool = Pool::builder(mgr)
+            .build()
+            .change_context(RepoInitErr::topics())?;
+
+        Self::new(pool).await
     }
 
     pub async fn init_with_pool_size(
         connection_details: ConnectionDetails,
         pool_size: usize,
-    ) -> Result<Self, Report<InitErr>> {
+    ) -> Result<Self, Report<RepoInitErr>> {
         let config = match connection_details {
-            ConnectionDetails::Url(url) => Config::from_str(&url).change_context(InitErr)?,
+            ConnectionDetails::Url(url) => {
+                Config::from_str(&url).change_context(RepoInitErr::topics())?
+            }
         };
 
         let mgr_config = ManagerConfig {
@@ -93,16 +97,18 @@ impl TopicRepo {
         let pool = Pool::builder(mgr)
             .max_size(pool_size)
             .build()
-            .change_context(InitErr)?;
+            .change_context(RepoInitErr::topics())?;
 
-        let mut handle = pool.get().await.change_context(InitErr)?;
+        let mut handle = pool.get().await.change_context(RepoInitErr::topics())?;
 
         let client = &mut *(&mut *handle);
 
         run_migrations(client).await?;
 
         Ok(Self {
-            statements: Statements::prepare(client).await.change_context(InitErr)?,
+            statements: TopicStatements::prepare(client)
+                .await
+                .change_context(RepoInitErr::topics())?,
             pool,
         })
     }
@@ -273,7 +279,9 @@ impl TopicRepository for TopicRepo {
     }
 
     async fn delete(&self, id: Self::TopicId) -> OptRepoResult<()> {
-        let rows_deleted = self.client(TopicRepoError::Delete).await?
+        let rows_deleted = self
+            .client(TopicRepoError::Delete)
+            .await?
             .execute(&self.statements.delete, &[&id.0])
             .await
             .change_context(TopicRepoError::Delete)?;

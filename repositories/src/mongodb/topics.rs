@@ -164,8 +164,12 @@ impl TopicRepository for TopicRepo {
             })?;
 
         let page_size = if list_criteria.page_size() > i64::MAX as u64 {
-            return Err(TopicRepoError::List.into_report())
-                .attach_with(|| format!("invalid page_size {}. It is too large and not supported", list_criteria.page_size()));
+            return Err(TopicRepoError::List.into_report()).attach_with(|| {
+                format!(
+                    "invalid page_size {}. It is too large and not supported",
+                    list_criteria.page_size()
+                )
+            });
         } else {
             list_criteria.page_size() as i64
         };

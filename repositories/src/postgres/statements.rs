@@ -7,7 +7,7 @@ use tokio_postgres::{Client, Statement};
 pub struct StatementPrepareError;
 
 #[derive(Debug, Clone)]
-pub struct Statements {
+pub struct TopicStatements {
     pub get: Statement,
     pub list: Statement,
     pub create: Statement,
@@ -17,7 +17,7 @@ pub struct Statements {
     pub delete: Statement,
 }
 
-impl Statements {
+impl TopicStatements {
     pub async fn prepare(client: &Client) -> Result<Self, Report<StatementPrepareError>> {
         Ok(Self {
             get: client
@@ -70,5 +70,22 @@ impl Statements {
                 .await
                 .change_context(StatementPrepareError)?,
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetStatements {
+    pub get: Statement,
+    pub list: Statement,
+    pub create: Statement,
+    pub patch_name_desc: Statement,
+    pub patch_name: Statement,
+    pub patch_desc: Statement,
+    pub delete: Statement,
+}
+
+impl SetStatements {
+    pub async fn prepare(client: &Client) -> Result<Self, Report<StatementPrepareError>> {
+        todo!()
     }
 }
