@@ -1,4 +1,4 @@
-create table topics (
+create table if not exists topics (
     id uuid primary key,
     name varchar(255) not null,
     description varchar(4096),

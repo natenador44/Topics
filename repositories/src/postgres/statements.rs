@@ -11,6 +11,9 @@ pub struct Statements {
     pub get: Statement,
     pub list: Statement,
     pub create: Statement,
+    pub patch_name_desc: Statement,
+    pub patch_name: Statement,
+    pub patch_desc: Statement,
 }
 
 impl Statements {
@@ -34,6 +37,27 @@ impl Statements {
                 .prepare_typed(
                     "insert into topics (id, name, description) values ($1, $2, $3) returning id, name, description, created, updated",
                     &[Type::UUID, Type::VARCHAR, Type::VARCHAR],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            patch_name_desc: client
+                .prepare_typed(
+                    "update topics set name = $1, description = $2, updated = now() where id = $3 returning id, name, description, created, updated",
+                    &[Type::VARCHAR, Type::VARCHAR, Type::UUID],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            patch_name: client
+                .prepare_typed(
+                    "update topics set name = $1, updated = now() where id = $2 returning id, name, description, created, updated",
+                    &[Type::VARCHAR, Type::UUID],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            patch_desc: client
+                .prepare_typed(
+                    "update topics set description = $1, updated = now() where id = $2 returning id, name, description, created, updated",
+                    &[Type::VARCHAR, Type::UUID],
                 )
                 .await
                 .change_context(StatementPrepareError)?,

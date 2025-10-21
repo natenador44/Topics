@@ -1,6 +1,7 @@
 use crate::postgres::statements::Statements;
 use deadpool_postgres::{Manager, ManagerConfig, Object, Pool, RecyclingMethod};
 use error_stack::{IntoReport, Report, ResultExt};
+use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio_postgres::types::ToSql;
@@ -230,7 +231,45 @@ impl TopicRepository for TopicRepo {
         id: Self::TopicId,
         patch: PatchTopic,
     ) -> OptRepoResult<Topic<Self::TopicId>> {
-        todo!()
+        let (stmt, params) = match (&patch.name, &patch.description) {
+            (Some(name), Field::Present(description)) => (
+                &self.statements.patch_name_desc,
+                &[
+                    name as &(dyn ToSql + Sync),
+                    description as &(dyn ToSql + Sync),
+                    &id.0 as &(dyn ToSql + Sync),
+                ] as &[&(dyn ToSql + Sync)],
+            ),
+            (Some(name), Field::Missing) => (
+                &self.statements.patch_name,
+                &[name as &(dyn ToSql + Sync), &id.0 as &(dyn ToSql + Sync)]
+                    as &[&(dyn ToSql + Sync)],
+            ),
+            (None, Field::Present(description)) => (
+                &self.statements.patch_desc,
+                &[
+                    description as &(dyn ToSql + Sync),
+                    &id.0 as &(dyn ToSql + Sync),
+                ] as &[&(dyn ToSql + Sync)],
+            ),
+            (None, Field::Missing) => {
+                warn!("no topic patch fields specified, returning existing topic");
+                (
+                    &self.statements.get,
+                    &[&id.0 as &(dyn ToSql + Sync)] as &[&(dyn ToSql + Sync)],
+                )
+            }
+        };
+
+        let topic = self
+            .client(TopicRepoError::Patch)
+            .await?
+            .query_opt(stmt, params)
+            .await
+            .change_context(TopicRepoError::Patch)?
+            .map(row_to_topic);
+
+        Ok(topic)
     }
 
     async fn delete(&self, id: Self::TopicId) -> OptRepoResult<()> {

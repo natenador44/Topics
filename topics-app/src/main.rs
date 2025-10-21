@@ -50,9 +50,23 @@ async fn build_routes() -> AppResult<Router> {
     .inspect(|_| debug!("routes built"))
 }
 
+// #[instrument]
+// async fn build_repo() -> AppResult<TopicRepo> {
+//     use repositories::mongodb::topics::{ConnectionDetails, TopicRepo};
+//
+//     let db_connection_str = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+//         "mongodb://admin:password@127.0.0.1:27017/?authSource=admin".to_string()
+//     });
+//
+//     debug!("initializing mongodb repository");
+//     TopicRepo::init(ConnectionDetails::Url(db_connection_str))
+//         .await
+//         .change_context(AppError)
+// }
+
 #[instrument]
-async fn build_repo() -> AppResult<TopicRepo> {
-    use repositories::mongodb::topics::{ConnectionDetails, TopicRepo};
+async fn build_repo() -> AppResult<repositories::postgres::topics::TopicRepo> {
+    use repositories::postgres::topics::{ConnectionDetails, TopicRepo};
 
     let db_connection_str = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
         "mongodb://admin:password@127.0.0.1:27017/?authSource=admin".to_string()

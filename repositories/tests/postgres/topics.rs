@@ -1,4 +1,5 @@
 use engine::Pagination;
+use optional_field::Field;
 use repositories::postgres::topics::{ConnectionDetails, TopicId, TopicRepo};
 use rstest::{fixture, rstest};
 use testcontainers_modules::{
@@ -7,7 +8,7 @@ use testcontainers_modules::{
 };
 use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
-use topics_core::model::NewTopic;
+use topics_core::model::{NewTopic, PatchTopic};
 
 struct TestRuntime {
     _container: ContainerAsync<Postgres>,
@@ -269,6 +270,155 @@ async fn create_many_multi_pending_is_created(#[future] runtime: TestRuntime) {
 
         assert_eq!(created_topic, &queried_topic);
     }
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_name_name_update(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let created_topic = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(created_topic.id, PatchTopic::new(Some("topic2".into()), Field::Missing))
+        .await
+        .unwrap()
+        .expect("topic should have been found");
+
+    assert_eq!(created_topic.id, updated_topic.id);
+    assert_eq!("topic2", &updated_topic.name);
+    assert_eq!(created_topic.description, updated_topic.description);
+    assert_eq!(created_topic.created, updated_topic.created);
+    assert!(updated_topic.updated.is_some());
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_name_desc_update(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let created_topic = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(created_topic.id, PatchTopic::new(Some("topic2".into()), Field::Present(Some("topic2 desc".into()))))
+        .await
+        .unwrap()
+        .expect("topic should have been found");
+
+    assert_eq!(created_topic.id, updated_topic.id);
+    assert_eq!("topic2", &updated_topic.name);
+    assert_eq!(Some("topic2 desc"), updated_topic.description.as_deref());
+    assert_eq!(created_topic.created, updated_topic.created);
+    assert!(updated_topic.updated.is_some());
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_non_null_desc_update(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let created_topic = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(created_topic.id, PatchTopic::new(None, Field::Present(Some("topic2 desc".into()))))
+        .await
+        .unwrap()
+        .expect("topic should have been found");
+
+    assert_eq!(created_topic.id, updated_topic.id);
+    assert_eq!(&created_topic.name, &updated_topic.name);
+    assert_eq!(Some("topic2 desc"), updated_topic.description.as_deref());
+    assert_eq!(created_topic.created, updated_topic.created);
+    assert!(updated_topic.updated.is_some());
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_null_desc_update(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let created_topic = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(created_topic.id, PatchTopic::new(None, Field::Present(None)))
+        .await
+        .unwrap()
+        .expect("topic should have been found");
+
+    assert_eq!(created_topic.id, updated_topic.id);
+    assert_eq!(&created_topic.name, &updated_topic.name);
+    assert_eq!(None, updated_topic.description.as_deref());
+    assert_eq!(created_topic.created, updated_topic.created);
+    assert!(updated_topic.updated.is_some());
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_no_updates_leaves_topic_alone(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let created_topic = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(created_topic.id, PatchTopic::new(None, Field::Missing))
+        .await
+        .unwrap()
+        .expect("topic should have been found");
+
+    assert_eq!(created_topic, updated_topic);
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_no_created_topics_returns_none(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let updated_topic = repo
+        .patch(TopicId::new(), PatchTopic::new(None, Field::Missing))
+        .await
+        .unwrap();
+
+    assert!(updated_topic.is_none());
+}
+
+#[rstest]
+#[tokio::test]
+async fn patch_topic_not_found_returns_none(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let _ = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(TopicId::new(), PatchTopic::new(None, Field::Missing))
+        .await
+        .unwrap();
+
+    assert!(updated_topic.is_none());
 }
 
 #[fixture]
