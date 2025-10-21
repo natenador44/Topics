@@ -1,51 +1,46 @@
-use engine::Pagination;
 use optional_field::Field;
-use repositories::postgres::topics::{ConnectionDetails, TopicId, TopicRepo};
-use rstest::{fixture, rstest};
-use testcontainers_modules::{
-    postgres::Postgres,
-    testcontainers::{ContainerAsync, runners::AsyncRunner},
-};
-use topics_core::TopicRepository;
+use rstest::rstest;
+use testcontainers_modules::testcontainers::{Image};
+use testcontainers_modules::testcontainers::runners::AsyncRunner;
+use engine::Pagination;
+use repositories::mongodb::topics as mongo_repo;
+use repositories::postgres::topics as postgres_repo;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic};
+use topics_core::TopicRepository;
+use crate::TestRuntime;
 
-struct TestRuntime {
-    _container: ContainerAsync<Postgres>,
-    repo: TopicRepo,
-}
 const DEFAULT_PAGINATION: Pagination = Pagination {
     page: 1,
     page_size: None,
 };
 const DEFAULT_PAGE_SIZE: u64 = 25;
 
-fn default_list_criteria() -> TopicListCriteria {
-    TopicListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE)
-}
-
-fn default_new_topic() -> NewTopic {
-    NewTopic::new(
-        "test topic 1".into(),
-        Some("test topic 1 description".into()),
-    )
-}
-
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn get_no_data_returns_none(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
-    let repo = runtime.repo;
+async fn get_no_data_returns_none<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
+    let repo = &runtime.repo;
 
-    let result = repo.get(TopicId::new()).await.unwrap();
+    let result = repo.get(runtime.generate_new_id()).await.unwrap();
 
     assert!(result.is_none());
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn create_then_get_returns_created_topic(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn create_then_get_returns_created_topic<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created = repo.create(default_new_topic()).await.unwrap();
@@ -60,9 +55,14 @@ async fn create_then_get_returns_created_topic(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn no_topics_created_list_returns_empty_vec(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn no_topics_created_list_returns_empty_vec<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let topics = repo.list(default_list_criteria()).await.unwrap();
@@ -71,9 +71,14 @@ async fn no_topics_created_list_returns_empty_vec(#[future] runtime: TestRuntime
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn create_single_then_list_returns_single_result(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn create_single_then_list_returns_single_result<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created = repo.create(default_new_topic()).await.unwrap();
@@ -85,9 +90,14 @@ async fn create_single_then_list_returns_single_result(#[future] runtime: TestRu
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn list_page_1_or_0_returns_first_page(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn list_page_1_or_0_returns_first_page<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created = repo.create(default_new_topic()).await.unwrap();
@@ -116,11 +126,15 @@ async fn list_page_1_or_0_returns_first_page(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn list_returns_all_created_if_create_called_n_lt_page_size_times(
-    #[future] runtime: TestRuntime,
-) {
-    let runtime = runtime.await;
+async fn list_returns_all_created_if_create_called_n_lt_page_size_times<C, R>(
+    #[future(awt)] #[case] runtime: TestRuntime<C, R>,
+)
+where C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let mut created = Vec::with_capacity(10);
@@ -138,9 +152,14 @@ async fn list_returns_all_created_if_create_called_n_lt_page_size_times(
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn list_returns_error_if_page_gt_i64_max(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn list_returns_error_if_page_gt_i64_max<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let result = repo
@@ -157,9 +176,12 @@ async fn list_returns_error_if_page_gt_i64_max(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn list_returns_error_if_page_size_gt_i64_max(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn list_returns_error_if_page_size_gt_i64_max<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where C: Image, R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let result = repo
@@ -176,9 +198,14 @@ async fn list_returns_error_if_page_size_gt_i64_max(#[future] runtime: TestRunti
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn list_returns_max_page_size_results(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn list_returns_max_page_size_results<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let new_topics = (0..100)
@@ -203,9 +230,14 @@ async fn list_returns_max_page_size_results(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn create_many_empty_vec_returns_empty_vec(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn create_many_empty_vec_returns_empty_vec<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created = repo.create_many(Vec::new()).await.unwrap();
@@ -213,9 +245,14 @@ async fn create_many_empty_vec_returns_empty_vec(#[future] runtime: TestRuntime)
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn create_many_single_is_created(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn create_many_single_is_created<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let original = vec![NewTopic::new("blah".into(), Some("blah desc".into()))];
@@ -238,9 +275,14 @@ async fn create_many_single_is_created(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn create_many_multi_pending_is_created(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn create_many_multi_pending_is_created<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let new_topics = vec![
@@ -273,9 +315,14 @@ async fn create_many_multi_pending_is_created(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn patch_name_name_update(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn patch_name_update<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created_topic = repo
@@ -297,9 +344,14 @@ async fn patch_name_name_update(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn patch_name_desc_update(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn patch_name_desc_update<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created_topic = repo
@@ -321,9 +373,14 @@ async fn patch_name_desc_update(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn patch_non_null_desc_update(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn patch_non_null_desc_update<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created_topic = repo
@@ -345,9 +402,14 @@ async fn patch_non_null_desc_update(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn patch_null_desc_update(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn patch_null_desc_update<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created_topic = repo
@@ -369,9 +431,14 @@ async fn patch_null_desc_update(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn patch_no_updates_leaves_topic_alone_returns_existing_topic(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn patch_no_updates_leaves_topic_alone_returns_existing_topic<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let created_topic = repo
@@ -389,12 +456,60 @@ async fn patch_no_updates_leaves_topic_alone_returns_existing_topic(#[future] ru
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn delete_no_topics_created_returns_none(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
-    let repo = runtime.repo;
+async fn patch_no_created_topics_returns_none<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
+    let repo = &runtime.repo;
 
-    let result = repo.delete(TopicId::new())
+    let updated_topic = repo
+        .patch(runtime.generate_new_id(), PatchTopic::new(None, Field::Present(None)))
+        .await
+        .unwrap();
+
+    assert!(updated_topic.is_none());
+}
+
+#[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn patch_topic_not_found_returns_none<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
+    let repo = &runtime.repo;
+
+    let _ = repo
+        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let updated_topic = repo
+        .patch(runtime.generate_new_id(), PatchTopic::new(None, Field::Missing))
+        .await
+        .unwrap();
+
+    assert!(updated_topic.is_none());
+}
+
+#[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn delete_no_topics_created_returns_none<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
+    let repo = &runtime.repo;
+
+    let result = repo.delete(runtime.generate_new_id())
         .await
         .expect("topic delete should not fail");
 
@@ -402,16 +517,21 @@ async fn delete_no_topics_created_returns_none(#[future] runtime: TestRuntime) {
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn delete_no_matching_existing_topics_returns_none(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
-    let repo = runtime.repo;
+async fn delete_no_matching_existing_topics_returns_none<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
+    let repo = &runtime.repo;
 
     let topic = repo.create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
         .await
         .unwrap();
 
-    let result = repo.delete(TopicId::new())
+    let result = repo.delete(runtime.generate_new_id())
         .await
         .expect("topic delete should not fail");
 
@@ -426,9 +546,14 @@ async fn delete_no_matching_existing_topics_returns_none(#[future] runtime: Test
 }
 
 #[rstest]
+#[case::mongo(mongo::runtime())]
+#[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn delete_with_existing_topic_deletes_topic(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
+async fn delete_with_existing_topic_deletes_topic<C, R>(#[future(awt)] #[case] runtime: TestRuntime<C, R>)
+where
+    C: Image,
+    R: TopicRepository,
+{
     let repo = runtime.repo;
 
     let topic = repo.create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
@@ -448,67 +573,83 @@ async fn delete_with_existing_topic_deletes_topic(#[future] runtime: TestRuntime
     assert!(topic.is_none());
 }
 
-#[rstest]
-#[tokio::test]
-async fn patch_no_created_topics_returns_none(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
-    let repo = runtime.repo;
-
-    let updated_topic = repo
-        .patch(TopicId::new(), PatchTopic::new(None, Field::Missing))
-        .await
-        .unwrap();
-
-    assert!(updated_topic.is_none());
-}
-
-#[rstest]
-#[tokio::test]
-async fn patch_topic_not_found_returns_none(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
-    let repo = runtime.repo;
-
-    let _ = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
-        .await
-        .unwrap();
-
-    let updated_topic = repo
-        .patch(TopicId::new(), PatchTopic::new(None, Field::Missing))
-        .await
-        .unwrap();
-
-    assert!(updated_topic.is_none());
-}
-
-#[fixture]
-async fn runtime(#[future] container: ContainerAsync<Postgres>) -> TestRuntime {
-    let container = container.await;
-    let host = container.get_host().await.unwrap();
-    let port = container.get_host_port_ipv4(5432).await.unwrap();
-
-    let repo = TopicRepo::init_with_pool_size(
-        ConnectionDetails::Url(format!(
-            "postgresql://testuser:testpass@{host}:{port}/topics"
-        )),
-        1,
+pub fn default_new_topic() -> NewTopic {
+    NewTopic::new(
+        "test topic 1".into(),
+        Some("test topic 1 description".into()),
     )
-    .await
-    .unwrap();
+}
 
-    TestRuntime {
-        _container: container,
-        repo,
+fn default_list_criteria() -> TopicListCriteria {
+    TopicListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE)
+}
+
+mod mongo {
+    use super::*;
+    use bson::oid::ObjectId;
+    use testcontainers_modules::mongo::Mongo;
+    use testcontainers_modules::testcontainers::ContainerAsync;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
+    use crate::TestRuntime;
+
+    pub async fn runtime() -> TestRuntime<Mongo, mongo_repo::TopicRepo> {
+        let mongo_container = container().await;
+        let host = mongo_container.get_host().await.unwrap();
+        let port = mongo_container.get_host_port_ipv4(27017).await.unwrap();
+
+        let repo = mongo_repo::TopicRepo::init(
+            mongo_repo::ConnectionDetails::Url(format!(
+                "mongodb://{host}:{port}/?authSource=admin"
+            )),
+        )
+            .await
+            .unwrap();
+
+        TestRuntime::new(mongo_container, repo, || mongo_repo::TopicId::new_with(ObjectId::new()))
+    }
+
+    async fn container() -> ContainerAsync<Mongo> {
+        Mongo::default()
+            .start()
+            .await
+            .unwrap()
     }
 }
 
-#[fixture]
-async fn container() -> ContainerAsync<Postgres> {
-    Postgres::default()
-        .with_db_name("topics")
-        .with_user("testuser")
-        .with_password("testpass")
-        .start()
-        .await
-        .unwrap()
+mod postgres {
+    use super::*;
+    use testcontainers_modules::postgres::Postgres;
+    use testcontainers_modules::testcontainers::ContainerAsync;
+    use repositories::postgres::topics::{ConnectionDetails, TopicId, TopicRepo};
+    use crate::TestRuntime;
+
+    pub async fn runtime() -> TestRuntime<Postgres, postgres_repo::TopicRepo> {
+        let container = container().await;
+        let host = container.get_host().await.unwrap();
+        let port = container.get_host_port_ipv4(5432).await.unwrap();
+
+        let repo = TopicRepo::init_with_pool_size(
+            ConnectionDetails::Url(format!(
+                "postgresql://testuser:testpass@{host}:{port}/topics"
+            )),
+            1,
+        )
+            .await
+            .unwrap();
+
+        TestRuntime::new(container, repo, || TopicId::new())
+    }
+
+
+    async fn container() -> ContainerAsync<Postgres> {
+        Postgres::default()
+            .with_db_name("topics")
+            .with_user("testuser")
+            .with_password("testpass")
+            .start()
+            .await
+            .unwrap()
+    }
 }
+
+

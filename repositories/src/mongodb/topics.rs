@@ -12,10 +12,10 @@ use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy)]
 #[repr(transparent)]
 #[schema(value_type = String)]
 pub struct TopicId(#[serde(serialize_with = "obj_id_serialize")] ObjectId);
@@ -28,7 +28,7 @@ where
 }
 
 impl TopicId {
-    pub fn new(id: ObjectId) -> Self {
+    pub fn new_with(id: ObjectId) -> Self {
         Self(id)
     }
 }
@@ -163,9 +163,16 @@ impl TopicRepository for TopicRepo {
                 )
             })?;
 
+        let page_size = if list_criteria.page_size() > i64::MAX as u64 {
+            return Err(TopicRepoError::List.into_report())
+                .attach_with(|| format!("invalid page_size {}. It is too large and not supported", list_criteria.page_size()));
+        } else {
+            list_criteria.page_size() as i64
+        };
+
         let options = FindOptions::builder()
             .skip(actual_page)
-            .limit(list_criteria.page_size().try_into().ok())
+            .limit(page_size)
             .build();
 
         self.db
@@ -193,7 +200,7 @@ impl TopicRepository for TopicRepo {
             .change_context(TopicRepoError::Create(CreateErrorType::DbError))?;
 
         Ok(Topic {
-            id: TopicId::new(
+            id: TopicId::new_with(
                 result
                     .inserted_id
                     .as_object_id()
@@ -211,6 +218,10 @@ impl TopicRepository for TopicRepo {
         &self,
         new_topics: Vec<NewTopic>,
     ) -> RepoResult<Vec<RepoResult<Topic<Self::TopicId>>>> {
+        if new_topics.is_empty() {
+            return Ok(vec![]);
+        }
+
         let create_requests = new_topics
             .into_iter()
             .map(|t| NewTopicCreated::new(t.name, t.description, Utc::now()))
@@ -281,6 +292,11 @@ impl TopicRepository for TopicRepo {
                     update_document.insert("description", Bson::Null);
                 }
             }
+        }
+
+        if update_document.is_empty() {
+            warn!("no topic patch fields specified, returning existing topic");
+            return self.get(id).await.change_context(TopicRepoError::Patch);
         }
 
         update_document.insert("updated", Utc::now().to_rfc3339());
