@@ -4,7 +4,6 @@ use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
 use repositories::mongodb::topics::TopicRepo;
 use topics_core::TopicRepository;
-use topics_routes::service::TopicService;
 use topics_routes::state::TopicAppState;
 use tracing::{debug, error, info, instrument, warn};
 use tracing_subscriber::layer::SubscriberExt;

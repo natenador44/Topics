@@ -1,4 +1,3 @@
-use chrono::Utc;
 use engine::Pagination;
 use repositories::postgres::topics::{ConnectionDetails, TopicId, TopicRepo};
 use rstest::{fixture, rstest};
@@ -6,9 +5,9 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{ContainerAsync, runners::AsyncRunner},
 };
+use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
-use topics_core::model::{NewTopic, Topic};
-use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicRepository};
+use topics_core::model::NewTopic;
 
 struct TestRuntime {
     _container: ContainerAsync<Postgres>,
@@ -185,15 +184,7 @@ async fn list_returns_max_page_size_results(#[future] runtime: TestRuntime) {
         .map(|i| NewTopic::new(format!("topic{i}"), Some(format!("topic{i} desc"))))
         .collect::<Vec<_>>();
 
-    let statuses = new_topics
-        .iter()
-        .map(|t| CreateManyTopicStatus::Pending {
-            name: t.name.clone(),
-            description: t.description.clone(),
-        })
-        .collect();
-
-    repo.create_many(statuses).await.unwrap();
+    repo.create_many(new_topics.clone()).await.unwrap();
 
     let topics = repo.list(default_list_criteria()).await.unwrap();
 
@@ -212,49 +203,26 @@ async fn list_returns_max_page_size_results(#[future] runtime: TestRuntime) {
 
 #[rstest]
 #[tokio::test]
-async fn create_many_all_non_pending_statuses_are_unchanged(#[future] runtime: TestRuntime) {
+async fn create_many_empty_vec_returns_empty_vec(#[future] runtime: TestRuntime) {
     let runtime = runtime.await;
     let repo = runtime.repo;
 
-    let original = vec![
-        CreateManyTopicStatus::Fail {
-            topic_name: None,
-            topic_description: None,
-            reason: CreateManyFailReason::MissingName,
-        },
-        CreateManyTopicStatus::Success(Topic::new(
-            TopicId::new(),
-            "blah".into(),
-            None,
-            Utc::now(),
-            None,
-        )),
-    ];
-
-    let updated = repo.create_many(original.clone()).await.unwrap();
-
-    assert_eq!(original, updated)
+    let created = repo.create_many(Vec::new()).await.unwrap();
+    assert!(created.is_empty());
 }
 
 #[rstest]
 #[tokio::test]
-async fn create_many_single_pending_is_created(#[future] runtime: TestRuntime) {
+async fn create_many_single_is_created(#[future] runtime: TestRuntime) {
     let runtime = runtime.await;
     let repo = runtime.repo;
 
-    let original = vec![CreateManyTopicStatus::Pending {
-        name: "blah".into(),
-        description: Some("blah desc".into()),
-    }];
+    let original = vec![NewTopic::new("blah".into(), Some("blah desc".into()))];
 
     let updated = repo.create_many(original.clone()).await.unwrap();
 
     assert_eq!(1, updated.len());
-    let status = &updated[0];
-
-    let CreateManyTopicStatus::Success(topic) = status else {
-        panic!("expected status to be Success");
-    };
+    let topic = updated[0].as_ref().expect("topic create was successful");
 
     assert_eq!("blah", &topic.name);
     assert_eq!(Some("blah desc"), topic.description.as_deref());
@@ -274,7 +242,7 @@ async fn create_many_multi_pending_is_created(#[future] runtime: TestRuntime) {
     let runtime = runtime.await;
     let repo = runtime.repo;
 
-    let new_topics = [
+    let new_topics = vec![
         NewTopic::new("topic1".into(), Some("topic1 desc".into())),
         NewTopic::new("topic2".into(), Some("topic2 desc".into())),
         NewTopic::new("topic3".into(), Some("topic3 desc".into())),
@@ -283,22 +251,12 @@ async fn create_many_multi_pending_is_created(#[future] runtime: TestRuntime) {
         NewTopic::new("topic6".into(), Some("topic6 desc".into())),
     ];
 
-    let original = new_topics
-        .iter()
-        .map(|t| CreateManyTopicStatus::Pending {
-            name: t.name.clone(),
-            description: t.description.clone(),
-        })
-        .collect::<Vec<_>>();
+    let created = repo.create_many(new_topics.clone()).await.unwrap();
 
-    let updated = repo.create_many(original).await.unwrap();
-
-    assert_eq!(new_topics.len(), updated.len());
+    assert_eq!(new_topics.len(), created.len());
 
     for (i, topic_req) in new_topics.into_iter().enumerate() {
-        let CreateManyTopicStatus::Success(created_topic) = &updated[i] else {
-            panic!("expected status to be Success");
-        };
+        let created_topic = created[i].as_ref().expect("topic created");
 
         assert_eq!(topic_req.name, created_topic.name);
         assert_eq!(topic_req.description, created_topic.description);
@@ -310,68 +268,6 @@ async fn create_many_multi_pending_is_created(#[future] runtime: TestRuntime) {
             .expect("topic was created in db");
 
         assert_eq!(created_topic, &queried_topic);
-    }
-}
-
-#[rstest]
-#[tokio::test]
-async fn create_many_mixed_statuses(#[future] runtime: TestRuntime) {
-    let runtime = runtime.await;
-    let repo = runtime.repo;
-
-    let original = vec![
-        CreateManyTopicStatus::Fail {
-            topic_name: Some("topic1".into()),
-            topic_description: None,
-            reason: CreateManyFailReason::MissingName,
-        },
-        CreateManyTopicStatus::Pending {
-            name: "topic2".into(),
-            description: Some("topic2 desc".into()),
-        },
-        CreateManyTopicStatus::Pending {
-            name: "topic3".into(),
-            description: Some("topic3 desc".into()),
-        },
-        CreateManyTopicStatus::Success(Topic::new(
-            TopicId::new(),
-            "topic4".into(),
-            Some("topic4 desc".into()),
-            Utc::now(),
-            None,
-        )),
-        CreateManyTopicStatus::Fail {
-            topic_name: Some("topic5".into()),
-            topic_description: None,
-            reason: CreateManyFailReason::MissingName,
-        },
-        CreateManyTopicStatus::Pending {
-            name: "topic6".into(),
-            description: Some("topic6 desc".into()),
-        },
-    ];
-
-    let updated = repo.create_many(original.clone()).await.unwrap();
-
-    assert_eq!(original[0], updated[0]);
-    is_success_with_name_desc(&updated[1], "topic2", Some("topic2 desc"));
-    is_success_with_name_desc(&updated[2], "topic3", Some("topic3 desc"));
-    assert_eq!(original[3], updated[3]);
-    assert_eq!(original[4], updated[4]);
-    is_success_with_name_desc(&updated[5], "topic6", Some("topic6 desc"));
-}
-
-fn is_success_with_name_desc(
-    status: &CreateManyTopicStatus<TopicId>,
-    name: &str,
-    description: Option<&str>,
-) {
-    match status {
-        CreateManyTopicStatus::Success(topic) => {
-            assert_eq!(name, &topic.name);
-            assert_eq!(description, topic.description.as_deref());
-        }
-        other => panic!("expected status to be Success, got {:?}", other),
     }
 }
 

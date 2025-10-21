@@ -1,4 +1,3 @@
-use error_stack::Report;
 use list_filter::TopicListCriteria;
 use model::{NewTopic, PatchTopic, Topic};
 use result::{OptRepoResult, RepoResult};
@@ -59,8 +58,8 @@ pub trait TopicRepository: Send + Sync + Clone + 'static {
 
     fn create_many(
         &self,
-        topics: Vec<CreateManyTopicStatus<Self::TopicId>>,
-    ) -> impl Future<Output = RepoResult<Vec<CreateManyTopicStatus<Self::TopicId>>>> + Send;
+        topics: Vec<NewTopic>,
+    ) -> impl Future<Output = RepoResult<Vec<RepoResult<Topic<Self::TopicId>>>>> + Send;
 
     fn patch(
         &self,

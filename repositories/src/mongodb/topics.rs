@@ -8,10 +8,10 @@ use optional_field::Field;
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use tokio_stream::StreamExt;
+use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
-use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicRepository};
 use tracing::{debug, error};
 use utoipa::ToSchema;
 
@@ -46,14 +46,14 @@ impl Display for TopicId {
 }
 
 #[derive(Debug, Serialize)]
-struct NewTopicCreated<'a> {
-    name: &'a str,
-    description: Option<&'a str>,
+struct NewTopicCreated {
+    name: String,
+    description: Option<String>,
     created: DateTime<Utc>,
 }
 
-impl<'a> NewTopicCreated<'a> {
-    fn new(name: &'a str, description: Option<&'a str>, created: DateTime<Utc>) -> Self {
+impl NewTopicCreated {
+    fn new(name: String, description: Option<String>, created: DateTime<Utc>) -> Self {
         Self {
             name,
             description,
@@ -182,16 +182,15 @@ impl TopicRepository for TopicRepo {
 
     async fn create(&self, new_topic: NewTopic) -> RepoResult<Topic<Self::TopicId>> {
         let created = Utc::now();
-        let result = {
-            // block is here to end the borrow of `new_topic` before we create Topic at the end
-            let topic =
-                NewTopicCreated::new(&new_topic.name, new_topic.description.as_deref(), created);
-            self.db
-                .collection::<NewTopicCreated>(TOPICS_COLLECTION_NAME)
-                .insert_one(&topic)
-                .await
-                .change_context(TopicRepoError::Create(CreateErrorType::DbError))?
-        };
+        // block is here to end the borrow of `new_topic` before we create Topic at the end
+        let topic = NewTopicCreated::new(new_topic.name, new_topic.description, created);
+
+        let result = self
+            .db
+            .collection::<NewTopicCreated>(TOPICS_COLLECTION_NAME)
+            .insert_one(&topic)
+            .await
+            .change_context(TopicRepoError::Create(CreateErrorType::DbError))?;
 
         Ok(Topic {
             id: TopicId::new(
@@ -201,8 +200,8 @@ impl TopicRepository for TopicRepo {
                     .ok_or(TopicRepoError::Create(CreateErrorType::DbError))
                     .attach_with(|| "inserted id for {new_topic:?} was not an ObjectId")?,
             ),
-            name: new_topic.name,
-            description: new_topic.description,
+            name: topic.name,
+            description: topic.description,
             created,
             updated: None,
         })
@@ -210,66 +209,57 @@ impl TopicRepository for TopicRepo {
 
     async fn create_many(
         &self,
-        mut statuses: Vec<CreateManyTopicStatus<Self::TopicId>>,
-    ) -> RepoResult<Vec<CreateManyTopicStatus<Self::TopicId>>> {
-        let topics = statuses.iter().filter_map(|status| match status {
-            CreateManyTopicStatus::Pending { name, description } => Some(NewTopicCreated::new(
-                name,
-                description.as_deref(),
-                Utc::now(),
-            )),
-            _ => None,
-        });
+        new_topics: Vec<NewTopic>,
+    ) -> RepoResult<Vec<RepoResult<Topic<Self::TopicId>>>> {
+        let create_requests = new_topics
+            .into_iter()
+            .map(|t| NewTopicCreated::new(t.name, t.description, Utc::now()))
+            .collect::<Vec<_>>();
 
         let mut result = self
             .db
             .collection::<NewTopicCreated>(TOPICS_COLLECTION_NAME)
-            .insert_many(topics)
+            .insert_many(&create_requests)
             .await
             .change_context(TopicRepoError::Create(CreateErrorType::DbError))?;
 
-        let mut pending_idx = 0;
-        let mut created = 0;
+        let mut topics = Vec::with_capacity(create_requests.len());
 
-        for status in statuses.iter_mut() {
-            if let CreateManyTopicStatus::Pending { name, description } = status {
-                let Some(id) = result.inserted_ids.remove(&pending_idx) else {
-                    error!("failed to match inserted id to topic status");
-                    return Err(TopicRepoError::Create(CreateErrorType::MatchFailure).into_report());
-                };
+        let mut persisted_topics = 0;
 
-                let id = id.as_object_id();
-                let name = std::mem::take(name);
-                let description = description.take();
+        for (i, create_req) in create_requests.into_iter().enumerate() {
+            let Some(id) = result.inserted_ids.remove(&i) else {
+                error!("failed to match inserted id to topic status");
+                topics.push(
+                    Err(TopicRepoError::Create(CreateErrorType::MatchFailure).into_report())
+                        as RepoResult<Topic<Self::TopicId>>,
+                );
+                continue;
+            };
 
-                match id {
-                    Some(id) => {
-                        *status = CreateManyTopicStatus::Success(Topic::create(
-                            TopicId(id),
-                            name,
-                            description,
-                        ));
-                        created += 1;
-                    }
-                    None => {
-                        error!(
-                            "topic was created but the id given back was not an Object ID: {id:?}"
-                        );
-                        *status = CreateManyTopicStatus::Fail {
-                            topic_name: Some(name),
-                            topic_description: description,
-                            reason: CreateManyFailReason::ServiceError,
-                        }
-                    }
+            match id.as_object_id() {
+                Some(id) => {
+                    topics.push(Ok(Topic::new(
+                        TopicId(id),
+                        create_req.name,
+                        create_req.description,
+                        create_req.created,
+                        None,
+                    )));
+                    persisted_topics += 1;
                 }
-
-                pending_idx += 1; // we only sent pending status to the db
+                None => {
+                    error!("topic was created but the id given back was not an Object ID: {id:?}");
+                    topics.push(Err(
+                        TopicRepoError::Create(CreateErrorType::MatchFailure).into_report()
+                    ));
+                }
             }
         }
 
-        debug!("successfully persisted {} new topics", created);
+        debug!("successfully persisted {} new topics", persisted_topics);
 
-        Ok(statuses)
+        Ok(topics)
     }
 
     async fn patch(

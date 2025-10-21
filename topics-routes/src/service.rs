@@ -6,7 +6,7 @@ use optional_field::Field;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicEngine, TopicRepository};
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 pub struct TopicCreation {
     name: String,
@@ -110,37 +110,65 @@ where
     where
         I: Iterator<Item = CreateManyTopic> + Send + Sync + 'static,
     {
-        let mut pending = 0;
-        let initial_outcomes = topics
-            .map(initial_bulk_create_outcome)
-            .inspect(|o| {
-                if matches!(o, CreateManyTopicStatus::Pending { .. }) {
-                    pending += 1
-                }
-            })
-            .collect::<Vec<_>>();
-        let requested_topics_count = initial_outcomes.len();
+        let mut statuses = Vec::new();
+        let mut pending_topics = Vec::new();
 
-        let final_outcomes = if pending == 0 {
-            initial_outcomes
-        } else {
-            self.engine
-                .repo()
-                .create_many(initial_outcomes)
-                .await
-                .change_context(TopicServiceError)?
-        };
+        let mut status_indexes = Vec::new();
+
+        for (i, topic_req) in topics.enumerate() {
+            let status = initial_bulk_create_outcome(topic_req);
+
+            if let CreateManyTopicStatus::Pending { name, description } = &status {
+                pending_topics.push(NewTopic::new(name.clone(), description.clone()));
+                status_indexes.push(i);
+            }
+
+            statuses.push(status);
+        }
+
+        if pending_topics.is_empty() {
+            return Ok(statuses);
+        }
+
+        let new_topic_results = self
+            .engine
+            .repo()
+            .create_many(pending_topics)
+            .await
+            .change_context(TopicServiceError)?;
+
+        let mut created_topics_count = 0;
+
+        for (i, topic_result) in new_topic_results.into_iter().enumerate() {
+            let status_idx = status_indexes[i];
+            let status = &mut statuses[status_idx];
+            match topic_result {
+                Ok(topic) => {
+                    created_topics_count += 1;
+                    *status = CreateManyTopicStatus::Success(topic);
+                }
+                Err(e) => {
+                    error!("Topic request (idx: {status_idx}) failed with error '{e}'");
+                    if let CreateManyTopicStatus::Pending { name, description } = status {
+                        *status = CreateManyTopicStatus::Fail {
+                            topic_name: Some(std::mem::take(name)),
+                            topic_description: description.take(),
+                            reason: CreateManyFailReason::ServiceError,
+                        };
+                    } else {
+                        unreachable!("Topic result respective status should only be 'Pending'");
+                    }
+                }
+            }
+        }
 
         info!(
             "created {} out of {} requested topics",
-            final_outcomes
-                .iter()
-                .filter(|o| matches!(o, CreateManyTopicStatus::Success(_)))
-                .count(),
-            requested_topics_count,
+            created_topics_count,
+            statuses.len(),
         );
-        metrics::increment_topics_created_by(final_outcomes.len());
-        Ok(final_outcomes)
+        metrics::increment_topics_created_by(created_topics_count);
+        Ok(statuses)
     }
 
     #[instrument(skip_all, name = "service#delete")]

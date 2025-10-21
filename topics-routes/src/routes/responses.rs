@@ -113,17 +113,17 @@ impl TopicError<()> {
 }
 
 impl<T: Serialize> TopicError<T> {
-    pub fn with_data(
-        status_code: StatusCode,
-        message: impl Into<ErrorMessageType>,
-        data: T,
-    ) -> Self {
-        Self {
-            status_code,
-            message: message.into(),
-            data: Some(data),
-        }
-    }
+    // pub fn with_data(
+    //     status_code: StatusCode,
+    //     message: impl Into<ErrorMessageType>,
+    //     data: T,
+    // ) -> Self {
+    //     Self {
+    //         status_code,
+    //         message: message.into(),
+    //         data: Some(data),
+    //     }
+    // }
 
     pub fn new(
         status_code: StatusCode,

@@ -3,6 +3,7 @@ use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+#[derive(Clone)]
 pub struct NewTopic {
     pub name: String,
     pub description: Option<String>,
