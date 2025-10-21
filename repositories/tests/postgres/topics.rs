@@ -370,7 +370,7 @@ async fn patch_null_desc_update(#[future] runtime: TestRuntime) {
 
 #[rstest]
 #[tokio::test]
-async fn patch_no_updates_leaves_topic_alone(#[future] runtime: TestRuntime) {
+async fn patch_no_updates_leaves_topic_alone_returns_existing_topic(#[future] runtime: TestRuntime) {
     let runtime = runtime.await;
     let repo = runtime.repo;
 
@@ -386,6 +386,66 @@ async fn patch_no_updates_leaves_topic_alone(#[future] runtime: TestRuntime) {
         .expect("topic should have been found");
 
     assert_eq!(created_topic, updated_topic);
+}
+
+#[rstest]
+#[tokio::test]
+async fn delete_no_topics_created_returns_none(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let result = repo.delete(TopicId::new())
+        .await
+        .expect("topic delete should not fail");
+
+    assert!(result.is_none());
+}
+
+#[rstest]
+#[tokio::test]
+async fn delete_no_matching_existing_topics_returns_none(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let topic = repo.create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let result = repo.delete(TopicId::new())
+        .await
+        .expect("topic delete should not fail");
+
+    assert!(result.is_none());
+
+    let topic = repo.get(topic.id)
+        .await
+        .unwrap();
+
+    assert!(topic.is_some());
+
+}
+
+#[rstest]
+#[tokio::test]
+async fn delete_with_existing_topic_deletes_topic(#[future] runtime: TestRuntime) {
+    let runtime = runtime.await;
+    let repo = runtime.repo;
+
+    let topic = repo.create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .await
+        .unwrap();
+
+    let result = repo.delete(topic.id)
+        .await
+        .expect("topic delete should not fail");
+
+    assert!(result.is_some());
+
+    let topic = repo.get(topic.id)
+        .await
+        .unwrap();
+
+    assert!(topic.is_none());
 }
 
 #[rstest]

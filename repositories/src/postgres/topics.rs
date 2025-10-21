@@ -11,7 +11,7 @@ use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -273,7 +273,12 @@ impl TopicRepository for TopicRepo {
     }
 
     async fn delete(&self, id: Self::TopicId) -> OptRepoResult<()> {
-        todo!()
+        let rows_deleted = self.client(TopicRepoError::Delete).await?
+            .execute(&self.statements.delete, &[&id.0])
+            .await
+            .change_context(TopicRepoError::Delete)?;
+
+        Ok((rows_deleted > 0).then_some(()))
     }
 }
 
