@@ -192,28 +192,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-extra"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9963ff19f40c6102c76756ef0a46004c0d58957d87259fc9208ff8441c12ab96"
-dependencies = [
- "axum",
- "axum-core",
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "http-body-util",
- "mime",
- "pin-project-lite",
- "rustversion",
- "serde_core",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
 name = "axum-macros"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -903,38 +881,6 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
-]
-
-[[package]]
-name = "entity-service"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "axum-streams",
- "axum-test",
- "chrono",
- "const_format",
- "engine",
- "error-stack",
- "futures",
- "itertools 0.14.0",
- "mockall",
- "mongodb",
- "optional-field",
- "rstest",
- "serde",
- "serde_json",
- "testcontainers-modules",
- "thiserror 2.0.17",
- "tokio",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "utoipa",
- "utoipa-axum",
- "utoipa-swagger-ui",
 ]
 
 [[package]]
@@ -2885,6 +2831,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "sets-core",
  "testcontainers-modules",
  "thiserror 2.0.17",
  "tokio",
@@ -3336,36 +3283,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "set-service"
+name = "sets-core"
 version = "0.1.0"
 dependencies = [
- "axum",
- "axum-extra",
- "axum-streams",
- "axum-test",
  "chrono",
- "const_format",
  "engine",
  "error-stack",
- "futures",
- "itertools 0.14.0",
- "mockall",
- "mongodb",
  "optional-field",
- "rstest",
  "serde",
- "serde_json",
- "testcontainers-modules",
  "thiserror 2.0.17",
- "tokio",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
  "utoipa",
- "utoipa-axum",
- "utoipa-swagger-ui",
 ]
 
 [[package]]

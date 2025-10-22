@@ -1,9 +1,26 @@
 use mongodb::bson::Bson;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize, Serializer};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use utoipa::ToSchema;
+
+pub trait Id:
+    Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> + Clone + Copy + ToSchema + PartialEq
+{
+}
+impl<T> Id for T where
+    T: Debug
+        + Send
+        + Sync
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Clone
+        + Copy
+        + ToSchema
+        + PartialEq
+{
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone)]
 #[repr(transparent)]

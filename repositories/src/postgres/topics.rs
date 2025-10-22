@@ -12,7 +12,7 @@ use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoError};
-use tracing::{error, warn};
+use tracing::warn;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ mod embedded {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy)]
 #[serde(transparent)]
-pub struct TopicId(Uuid);
+pub struct TopicId(pub Uuid);
 impl TopicId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
@@ -52,58 +52,6 @@ impl TopicRepo {
         let mut handle = pool.get().await.change_context(RepoInitErr::topics())?;
 
         let client = &mut *(&mut *handle);
-
-        run_migrations(client).await?;
-
-        Ok(Self {
-            statements: TopicStatements::prepare(client)
-                .await
-                .change_context(RepoInitErr::topics())?,
-            pool,
-        })
-    }
-    pub async fn init(connection_details: ConnectionDetails) -> Result<Self, Report<RepoInitErr>> {
-        let config = match connection_details {
-            ConnectionDetails::Url(url) => {
-                Config::from_str(&url).change_context(RepoInitErr::topics())?
-            }
-        };
-
-        let mgr_config = ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        };
-        let mgr = Manager::from_config(config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr)
-            .build()
-            .change_context(RepoInitErr::topics())?;
-
-        Self::new(pool).await
-    }
-
-    pub async fn init_with_pool_size(
-        connection_details: ConnectionDetails,
-        pool_size: usize,
-    ) -> Result<Self, Report<RepoInitErr>> {
-        let config = match connection_details {
-            ConnectionDetails::Url(url) => {
-                Config::from_str(&url).change_context(RepoInitErr::topics())?
-            }
-        };
-
-        let mgr_config = ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        };
-        let mgr = Manager::from_config(config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr)
-            .max_size(pool_size)
-            .build()
-            .change_context(RepoInitErr::topics())?;
-
-        let mut handle = pool.get().await.change_context(RepoInitErr::topics())?;
-
-        let client = &mut *(&mut *handle);
-
-        run_migrations(client).await?;
 
         Ok(Self {
             statements: TopicStatements::prepare(client)

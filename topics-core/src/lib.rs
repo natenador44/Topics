@@ -1,7 +1,8 @@
+use engine::id::Id;
 use list_filter::TopicListCriteria;
 use model::{NewTopic, PatchTopic, Topic};
 use result::{OptRepoResult, RepoResult};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fmt::Debug;
 use utoipa::ToSchema;
 
@@ -10,7 +11,7 @@ pub mod model;
 pub mod result;
 
 pub trait TopicEngine: Clone + Send + Sync + 'static {
-    type TopicId: TopicId;
+    type TopicId: Id;
     type Repo: TopicRepository<TopicId = Self::TopicId>;
     // type Cache // bound not necessarily from this crate, since this will be common to all services
 
@@ -39,7 +40,7 @@ pub enum CreateManyTopicStatus<T> {
 }
 
 pub trait TopicRepository: Send + Sync + Clone + 'static {
-    type TopicId: TopicId;
+    type TopicId: Id;
 
     fn get(
         &self,
@@ -68,14 +69,4 @@ pub trait TopicRepository: Send + Sync + Clone + 'static {
     ) -> impl Future<Output = OptRepoResult<Topic<Self::TopicId>>> + Send;
 
     fn delete(&self, id: Self::TopicId) -> impl Future<Output = OptRepoResult<()>> + Send;
-}
-
-pub trait TopicId:
-    Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> + Clone + ToSchema + PartialEq
-{
-}
-
-impl<T> TopicId for T where
-    T: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> + Clone + ToSchema + PartialEq
-{
 }

@@ -1,4 +1,5 @@
 // #[cfg(feature = "postgres-topics")]
+pub mod initializer;
 pub mod sets;
 mod statements;
 pub mod topics;
@@ -17,5 +18,9 @@ impl RepoInitErr {
 
     fn sets() -> Self {
         Self("sets")
+    }
+
+    fn all() -> Self {
+        Self("all")
     }
 }

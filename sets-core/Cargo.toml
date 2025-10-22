@@ -1,0 +1,13 @@
+[package]
+name = "sets-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine = { path = "../engine" }
+serde = { workspace = true }
+utoipa = { workspace = true }
+error-stack = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+optional-field = { workspace = true }

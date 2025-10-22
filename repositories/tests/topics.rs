@@ -1,13 +1,10 @@
-use crate::TestRuntime;
 use engine::Pagination;
 use optional_field::Field;
 use rstest::rstest;
-use testcontainers_modules::testcontainers::Image;
+use testcontainers_modules::testcontainers::{ContainerAsync, Image};
 use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic};
-use super::{mongo, postgres};
-
 const DEFAULT_PAGINATION: Pagination = Pagination {
     page: 1,
     page_size: None,
@@ -670,4 +667,90 @@ fn default_list_criteria() -> TopicListCriteria {
     TopicListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE)
 }
 
+struct TestRuntime<C, R>
+where
+    C: Image,
+    R: TopicRepository,
+{
+    _container: ContainerAsync<C>,
+    repo: R,
+    new_id_fn: Box<dyn Fn() -> R::TopicId>,
+}
 
+impl<C, R> TestRuntime<C, R>
+where
+    C: Image,
+    R: TopicRepository,
+{
+    fn new<F>(container: ContainerAsync<C>, repo: R, new_id_fn: F) -> Self
+    where
+        F: Fn() -> R::TopicId + 'static,
+    {
+        Self {
+            _container: container,
+            repo,
+            new_id_fn: Box::new(new_id_fn),
+        }
+    }
+
+    fn generate_new_id(&self) -> R::TopicId {
+        (self.new_id_fn)()
+    }
+}
+
+mod mongo {
+    use crate::topics::TestRuntime;
+    use bson::oid::ObjectId;
+    use repositories::mongodb::topics as mongo_repo;
+    use testcontainers_modules::mongo::Mongo;
+    use testcontainers_modules::testcontainers::ContainerAsync;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
+
+    pub async fn runtime() -> TestRuntime<Mongo, mongo_repo::TopicRepo> {
+        let mongo_container = container().await;
+        let host = mongo_container.get_host().await.unwrap();
+        let port = mongo_container.get_host_port_ipv4(27017).await.unwrap();
+
+        let repo = mongo_repo::TopicRepo::init(mongo_repo::ConnectionDetails::Url(format!(
+            "mongodb://{host}:{port}/?authSource=admin"
+        )))
+        .await
+        .unwrap();
+
+        TestRuntime::new(mongo_container, repo, || {
+            mongo_repo::TopicId::new_with(ObjectId::new())
+        })
+    }
+
+    async fn container() -> ContainerAsync<Mongo> {
+        Mongo::default().start().await.unwrap()
+    }
+}
+
+mod postgres {
+    use crate::topics::TestRuntime;
+    use repositories::postgres::ConnectionDetails;
+    use repositories::postgres::initializer::RepoInitializer;
+    use repositories::postgres::topics as postgres_repo;
+    use repositories::postgres::topics::{TopicId, TopicRepo};
+    use testcontainers_modules::postgres::Postgres;
+
+    pub async fn runtime() -> TestRuntime<Postgres, postgres_repo::TopicRepo> {
+        let container = crate::postgres::container().await;
+        let host = container.get_host().await.unwrap();
+        let port = container.get_host_port_ipv4(5432).await.unwrap();
+
+        let repo = RepoInitializer::new()
+            .with_topics()
+            .init(
+                ConnectionDetails::Url(format!(
+                    "postgresql://testuser:testpass@{host}:{port}/topics"
+                )),
+                Some(1),
+            )
+            .await
+            .unwrap();
+
+        TestRuntime::new(container, repo, || TopicId::new())
+    }
+}

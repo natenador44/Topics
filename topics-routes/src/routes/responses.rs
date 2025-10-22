@@ -1,10 +1,11 @@
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use engine::id::Id;
 use serde::Serialize;
 use std::borrow::Cow;
+use topics_core::CreateManyTopicStatus;
 use topics_core::model::Topic;
-use topics_core::{CreateManyTopicStatus, TopicId};
 use tracing::warn;
 use utoipa::ToSchema;
 
@@ -32,7 +33,7 @@ impl<T> TopicResponse<T> {
     }
 }
 
-impl<T: TopicId> IntoResponse for TopicResponse<T> {
+impl<T: Id> IntoResponse for TopicResponse<T> {
     fn into_response(self) -> Response {
         (self.status_code, Json(self)).into_response()
     }
@@ -76,7 +77,7 @@ impl<T> BulkCreateResponse<T> {
     }
 }
 
-impl<T: TopicId> IntoResponse for BulkCreateResponse<T> {
+impl<T: Id> IntoResponse for BulkCreateResponse<T> {
     fn into_response(self) -> Response {
         (self.status_code, Json(self)).into_response()
     }

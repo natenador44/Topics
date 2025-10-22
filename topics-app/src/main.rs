@@ -3,6 +3,7 @@ use dotenv::dotenv;
 use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
 use repositories::mongodb::topics::TopicRepo;
+use repositories::postgres::initializer::RepoInitializer;
 use topics_core::TopicRepository;
 use topics_routes::state::TopicAppState;
 use tracing::{debug, error, info, instrument, warn};
@@ -66,14 +67,16 @@ async fn build_routes() -> AppResult<Router> {
 
 #[instrument]
 async fn build_repo() -> AppResult<repositories::postgres::topics::TopicRepo> {
-    use repositories::postgres::topics::{ConnectionDetails, TopicRepo};
+    use repositories::postgres::{ConnectionDetails, topics::TopicRepo};
 
-    let db_connection_str = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "mongodb://admin:password@127.0.0.1:27017/?authSource=admin".to_string()
-    });
+    let db_connection_str = std::env::var("DATABASE_URL")
+        .change_context(AppError)
+        .attach("DATABASE_URL is missing")?;
 
     debug!("initializing mongodb repository");
-    TopicRepo::init(ConnectionDetails::Url(db_connection_str))
+    RepoInitializer::new()
+        .with_topics()
+        .init(ConnectionDetails::Url(db_connection_str), None)
         .await
         .change_context(AppError)
 }

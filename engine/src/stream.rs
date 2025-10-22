@@ -69,6 +69,6 @@ where
 
 impl<T> IntoResponse for StreamingResponse<T> {
     fn into_response(self) -> Response {
-        (StatusCode::OK, self.stream).into_response()
+        (self.status_code, self.stream).into_response()
     }
 }

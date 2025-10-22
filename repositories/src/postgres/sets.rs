@@ -1,14 +1,14 @@
 use crate::postgres::RepoInitErr;
-use crate::postgres::statements::{SetStatements, TopicStatements};
+use crate::postgres::statements::SetStatements;
 use crate::postgres::topics::TopicId;
-use deadpool_postgres::Pool;
+use deadpool_postgres::{Object, Pool};
 use error_stack::{Report, ResultExt};
 use serde::{Deserialize, Serialize};
-use sets_core::SetRepository;
 use sets_core::list_filter::SetListCriteria;
 use sets_core::model::{NewSet, PatchSet, Set};
-use sets_core::result::{OptRepoResult, RepoResult};
-use tokio_postgres::Client;
+use sets_core::result::{OptRepoResult, RepoResult, SetRepoError};
+use sets_core::{SetKey, SetRepository};
+use tokio_postgres::{Client, Row};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -25,17 +25,17 @@ impl SetId {
     }
 }
 
-pub struct SetKey(SetId, TopicId);
-impl sets_core::SetKey for SetKey {
+pub struct PostgresSetKey(pub TopicId, pub SetId);
+impl sets_core::SetKey for PostgresSetKey {
     type SetId = SetId;
     type TopicId = TopicId;
 
     fn set_id(&self) -> Self::SetId {
-        self.0
+        self.1
     }
 
     fn topic_id(&self) -> Self::TopicId {
-        self.1
+        self.0
     }
 }
 
@@ -64,8 +64,6 @@ impl SetRepo {
 
         let client = &mut *(&mut *handle);
 
-        run_migrations(client).await?;
-
         Ok(Self {
             statements: SetStatements::prepare(client)
                 .await
@@ -73,13 +71,32 @@ impl SetRepo {
             pool,
         })
     }
+
+    async fn client(&self, on_err: SetRepoError) -> RepoResult<Object> {
+        self.pool.get().await.change_context(on_err)
+    }
+}
+
+fn row_to_set(row: Row) -> Set<PostgresSetKey> {
+    Set {
+        key: PostgresSetKey(TopicId(row.get("topic_id")), SetId(row.get("id"))),
+        name: row.get("name"),
+        description: row.get("description"),
+        created: row.get("created"),
+        updated: row.get("updated"),
+    }
 }
 
 impl SetRepository for SetRepo {
-    type SetKey = SetKey;
+    type SetKey = PostgresSetKey;
 
     async fn get(&self, key: Self::SetKey) -> OptRepoResult<Set<Self::SetKey>> {
-        todo!()
+        self.client(SetRepoError::Get)
+            .await?
+            .query_opt(&self.statements.get, &[&key.set_id().0, &key.topic_id().0])
+            .await
+            .change_context(SetRepoError::Get)
+            .map(|r| r.map(row_to_set))
     }
 
     async fn list(
