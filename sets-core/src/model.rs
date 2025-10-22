@@ -18,6 +18,14 @@ pub struct NewSet {
     pub name: String,
     pub description: Option<String>,
 }
+impl NewSet {
+    pub fn new(name: impl Into<String>, description: Option<impl Into<String>>) -> Self {
+        Self {
+            name: name.into(),
+            description: description.map(Into::into),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct PatchSet {

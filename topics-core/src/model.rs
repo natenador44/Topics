@@ -10,8 +10,11 @@ pub struct NewTopic {
 }
 
 impl NewTopic {
-    pub fn new(name: String, description: Option<String>) -> Self {
-        Self { name, description }
+    pub fn new(name: impl Into<String>, description: Option<impl Into<String>>) -> Self {
+        Self {
+            name: name.into(),
+            description: description.map(Into::into),
+        }
     }
 }
 

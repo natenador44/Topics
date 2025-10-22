@@ -1,12 +1,11 @@
+use crate::postgres::RepoInitErr;
 use crate::postgres::statements::TopicStatements;
-use crate::postgres::{ConnectionDetails, RepoInitErr};
-use deadpool_postgres::{Manager, ManagerConfig, Object, Pool, RecyclingMethod};
+use deadpool_postgres::{Object, Pool};
 use error_stack::{IntoReport, Report, ResultExt};
 use optional_field::Field;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use tokio_postgres::Row;
 use tokio_postgres::types::ToSql;
-use tokio_postgres::{Client, Config, NoTls, Row};
 use tokio_stream::StreamExt;
 use topics_core::TopicRepository;
 use topics_core::list_filter::TopicListCriteria;
@@ -15,11 +14,6 @@ use topics_core::result::{CreateErrorType, OptRepoResult, RepoResult, TopicRepoE
 use tracing::warn;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-mod embedded {
-    use refinery::embed_migrations;
-    embed_migrations!("./src/postgres/migrations/topics");
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy)]
 #[serde(transparent)]
@@ -37,14 +31,6 @@ impl TopicId {
 pub struct TopicRepo {
     pool: Pool,
     statements: TopicStatements,
-}
-
-async fn run_migrations(client: &mut Client) -> Result<(), Report<RepoInitErr>> {
-    embedded::migrations::runner()
-        .run_async(client)
-        .await
-        .change_context(RepoInitErr::topics())?;
-    Ok(())
 }
 
 impl TopicRepo {
@@ -326,9 +312,9 @@ mod tests {
     #[test]
     fn generate_create_many_insert_creates_insert_for_all_pending_statuses() {
         let new_topics = vec![
-            NewTopic::new("topic1".into(), Some("topic1 desc".into())),
-            NewTopic::new("topic2".into(), Some("topic2 desc".into())),
-            NewTopic::new("topic3".into(), Some("topic3 desc".into())),
+            NewTopic::new("topic1", Some("topic1 desc")),
+            NewTopic::new("topic2", Some("topic2 desc")),
+            NewTopic::new("topic3", Some("topic3 desc")),
         ];
 
         let insert = generate_create_many_insert(new_topics.clone()).unwrap();

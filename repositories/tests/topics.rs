@@ -284,7 +284,7 @@ async fn create_many_single_is_created<C, R>(
 {
     let repo = runtime.repo;
 
-    let original = vec![NewTopic::new("blah".into(), Some("blah desc".into()))];
+    let original = vec![NewTopic::new("blah", Some("blah desc"))];
 
     let updated = repo.create_many(original.clone()).await.unwrap();
 
@@ -318,12 +318,12 @@ async fn create_many_multi_pending_is_created<C, R>(
     let repo = runtime.repo;
 
     let new_topics = vec![
-        NewTopic::new("topic1".into(), Some("topic1 desc".into())),
-        NewTopic::new("topic2".into(), Some("topic2 desc".into())),
-        NewTopic::new("topic3".into(), Some("topic3 desc".into())),
-        NewTopic::new("topic4".into(), Some("topic4 desc".into())),
-        NewTopic::new("topic5".into(), Some("topic5 desc".into())),
-        NewTopic::new("topic6".into(), Some("topic6 desc".into())),
+        NewTopic::new("topic1", Some("topic1 desc")),
+        NewTopic::new("topic2", Some("topic2 desc")),
+        NewTopic::new("topic3", Some("topic3 desc")),
+        NewTopic::new("topic4", Some("topic4 desc")),
+        NewTopic::new("topic5", Some("topic5 desc")),
+        NewTopic::new("topic6", Some("topic6 desc")),
     ];
 
     let created = repo.create_many(new_topics.clone()).await.unwrap();
@@ -361,7 +361,7 @@ async fn patch_name_update<C, R>(
     let repo = runtime.repo;
 
     let created_topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -396,7 +396,7 @@ async fn patch_name_desc_update<C, R>(
     let repo = runtime.repo;
 
     let created_topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -434,7 +434,7 @@ async fn patch_non_null_desc_update<C, R>(
     let repo = runtime.repo;
 
     let created_topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -469,7 +469,7 @@ async fn patch_null_desc_update<C, R>(
     let repo = runtime.repo;
 
     let created_topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -504,7 +504,7 @@ async fn patch_no_updates_leaves_topic_alone_returns_existing_topic<C, R>(
     let repo = runtime.repo;
 
     let created_topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -557,7 +557,7 @@ async fn patch_topic_not_found_returns_none<C, R>(
     let repo = &runtime.repo;
 
     let _ = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -609,7 +609,7 @@ async fn delete_no_matching_existing_topics_returns_none<C, R>(
     let repo = &runtime.repo;
 
     let topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -640,7 +640,7 @@ async fn delete_with_existing_topic_deletes_topic<C, R>(
     let repo = runtime.repo;
 
     let topic = repo
-        .create(NewTopic::new("topic1".into(), Some("topic1 desc".into())))
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
         .await
         .unwrap();
 
@@ -657,10 +657,7 @@ async fn delete_with_existing_topic_deletes_topic<C, R>(
 }
 
 pub fn default_new_topic() -> NewTopic {
-    NewTopic::new(
-        "test topic 1".into(),
-        Some("test topic 1 description".into()),
-    )
+    NewTopic::new("test topic 1", Some("test topic 1 description"))
 }
 
 fn default_list_criteria() -> TopicListCriteria {
@@ -732,7 +729,7 @@ mod postgres {
     use repositories::postgres::ConnectionDetails;
     use repositories::postgres::initializer::RepoInitializer;
     use repositories::postgres::topics as postgres_repo;
-    use repositories::postgres::topics::{TopicId, TopicRepo};
+    use repositories::postgres::topics::TopicId;
     use testcontainers_modules::postgres::Postgres;
 
     pub async fn runtime() -> TestRuntime<Postgres, postgres_repo::TopicRepo> {

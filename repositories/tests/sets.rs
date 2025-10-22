@@ -1,9 +1,12 @@
 use engine::id::Id;
 use rstest::rstest;
-use sets_core::SetRepository;
+use sets_core::model::NewSet;
+use sets_core::result::{Reason, SetRepoError};
+use sets_core::{SetKey, SetRepository};
 use testcontainers_modules::testcontainers::{ContainerAsync, Image};
 use topics_core::TopicRepository;
 use topics_core::model::NewTopic;
+
 #[rstest]
 #[case::postgres(postgres::runtime())]
 #[tokio::test]
@@ -15,10 +18,10 @@ async fn get_no_set_data_returns_none<C, R>(
     C: Image,
     R: Repos,
 {
-    let topics = &runtime.repos.topics();
+    let topics = runtime.repos.topics();
 
     let new_topic = topics
-        .create(NewTopic::new("topic1".into(), None))
+        .create(NewTopic::new("topic1", None::<String>))
         .await
         .expect("topic creation works");
 
@@ -30,6 +33,118 @@ async fn get_no_set_data_returns_none<C, R>(
         .expect("set get success");
 
     assert!(set.is_none());
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn get_no_associated_topic_data_returns_none<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let sets = runtime.repos.sets();
+
+    let set = sets
+        .get(runtime.new_set_key())
+        .await
+        .expect("set get success");
+
+    assert!(set.is_none());
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn create_no_topic_data_results_in_topic_not_found_err<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let sets = runtime.repos.sets();
+
+    let e = sets
+        .create(
+            runtime.random_topic_id(),
+            NewSet::new("set1", Some("set1 desc")),
+        )
+        .await
+        .expect_err("create should fail");
+
+    assert_eq!(
+        &SetRepoError::Create(Reason::TopicNotFound),
+        e.current_context()
+    );
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn create_topic_not_exists_results_in_topic_not_found_err<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let _ = runtime
+        .repos
+        .topics()
+        .create(NewTopic::new("topic1", None::<String>))
+        .await
+        .expect("topic created");
+
+    let sets = runtime.repos.sets();
+
+    let e = sets
+        .create(
+            runtime.random_topic_id(),
+            NewSet::new("set1", Some("set1 desc")),
+        )
+        .await
+        .expect_err("create should fail");
+
+    assert_eq!(
+        &SetRepoError::Create(Reason::TopicNotFound),
+        e.current_context()
+    );
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn create_topic_does_exist_creates_set<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let topic = runtime
+        .repos
+        .topics()
+        .create(NewTopic::new("topic1", Some("topic1 desc")))
+        .await
+        .expect("topic created");
+
+    let sets = runtime.repos.sets();
+
+    let set = sets
+        .create(topic.id, NewSet::new("set1", Some("set1 desc")))
+        .await
+        .expect("set created");
+
+    assert_eq!(topic.id, set.key.topic_id());
+    assert_eq!("set1", &set.name);
+    assert_eq!(Some("set1 desc"), set.description.as_deref());
 }
 
 mod postgres {
@@ -134,5 +249,13 @@ where
         topic_id: <R::Topic as TopicRepository>::TopicId,
     ) -> R::SetKey {
         (self.set_key_gen)(Some(topic_id), None)
+    }
+
+    fn new_set_key(&self) -> R::SetKey {
+        (self.set_key_gen)(None, None)
+    }
+
+    fn random_topic_id(&self) -> <R::Topic as TopicRepository>::TopicId {
+        (self.set_key_gen)(None, None).topic_id()
     }
 }

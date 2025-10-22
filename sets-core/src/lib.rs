@@ -2,12 +2,13 @@ use crate::list_filter::SetListCriteria;
 use crate::model::{NewSet, PatchSet, Set};
 use crate::result::{OptRepoResult, RepoResult};
 use engine::id::Id;
+use std::fmt::Debug;
 
 pub mod model;
 
 pub mod list_filter;
 pub mod result;
-pub trait SetKey {
+pub trait SetKey: Debug {
     type SetId: Id;
     type TopicId: Id;
 

@@ -1,6 +1,6 @@
 use error_stack::{Report, ResultExt};
 use tokio_postgres::types::Type;
-use tokio_postgres::{Client, GenericClient, Statement};
+use tokio_postgres::{Client, Statement};
 
 #[derive(Debug, thiserror::Error)]
 #[error("failed to prepare topics statement")]
@@ -76,13 +76,12 @@ impl TopicStatements {
 #[derive(Debug, Clone)]
 pub struct SetStatements {
     pub get: Statement,
-    /*    pub list: Statement,
-        pub create: Statement,
-        pub patch_name_desc: Statement,
-        pub patch_name: Statement,
-        pub patch_desc: Statement,
-        pub delete: Statement,
-    */
+    // pub list: Statement,
+    pub create: Statement,
+    // pub patch_name_desc: Statement,
+    // pub patch_name: Statement,
+    // pub patch_desc: Statement,
+    // pub delete: Statement,
 }
 
 impl SetStatements {
@@ -90,8 +89,15 @@ impl SetStatements {
         Ok(Self {
             get: client
                 .prepare_typed(
-                    "select id, name, description, created, updated from sets where id = $1 and topic_id = $2",
+                    "select id, topic_id, name, description, created, updated from sets where id = $1 and topic_id = $2",
                     &[Type::UUID, Type::UUID]
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            create: client
+                .prepare_typed(
+                    "insert into sets (id, topic_id, name, description) values ($1, $2, $3, $4) returning id, topic_id, name, description, created, updated",
+                    &[Type::UUID, Type::UUID, Type::VARCHAR, Type::VARCHAR],
                 )
                 .await
                 .change_context(StatementPrepareError)?,

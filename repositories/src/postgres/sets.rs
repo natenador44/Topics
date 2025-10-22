@@ -2,13 +2,14 @@ use crate::postgres::RepoInitErr;
 use crate::postgres::statements::SetStatements;
 use crate::postgres::topics::TopicId;
 use deadpool_postgres::{Object, Pool};
-use error_stack::{Report, ResultExt};
+use error_stack::{IntoReport, Report, ResultExt};
 use serde::{Deserialize, Serialize};
 use sets_core::list_filter::SetListCriteria;
 use sets_core::model::{NewSet, PatchSet, Set};
-use sets_core::result::{OptRepoResult, RepoResult, SetRepoError};
+use sets_core::result::{OptRepoResult, Reason, RepoResult, SetRepoError};
 use sets_core::{SetKey, SetRepository};
-use tokio_postgres::{Client, Row};
+use tokio_postgres::Row;
+use tokio_postgres::error::SqlState;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -25,8 +26,9 @@ impl SetId {
     }
 }
 
+#[derive(Debug)]
 pub struct PostgresSetKey(pub TopicId, pub SetId);
-impl sets_core::SetKey for PostgresSetKey {
+impl SetKey for PostgresSetKey {
     type SetId = SetId;
     type TopicId = TopicId;
 
@@ -37,19 +39,6 @@ impl sets_core::SetKey for PostgresSetKey {
     fn topic_id(&self) -> Self::TopicId {
         self.0
     }
-}
-
-mod embedded {
-    use refinery::embed_migrations;
-    embed_migrations!("./src/postgres/migrations/sets");
-}
-
-async fn run_migrations(client: &mut Client) -> Result<(), Report<RepoInitErr>> {
-    embedded::migrations::runner()
-        .run_async(client)
-        .await
-        .change_context(RepoInitErr::sets())?;
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -101,7 +90,7 @@ impl SetRepository for SetRepo {
 
     async fn list(
         &self,
-        topic_id: <Self::SetKey as sets_core::SetKey>::TopicId,
+        topic_id: <Self::SetKey as SetKey>::TopicId,
         list_criteria: SetListCriteria,
     ) -> RepoResult<Vec<Set<Self::SetKey>>> {
         todo!()
@@ -109,15 +98,35 @@ impl SetRepository for SetRepo {
 
     async fn create(
         &self,
-        topic_id: <Self::SetKey as sets_core::SetKey>::TopicId,
+        topic_id: <Self::SetKey as SetKey>::TopicId,
         new_set: NewSet,
     ) -> RepoResult<Set<Self::SetKey>> {
-        todo!()
+        let set_id = SetId::new();
+        let result = self
+            .client(SetRepoError::Create(Reason::Db))
+            .await?
+            .query_one(
+                &self.statements.create,
+                &[&set_id.0, &topic_id.0, &new_set.name, &new_set.description],
+            )
+            .await;
+
+        match result {
+            Ok(row) => Ok(row_to_set(row)),
+            Err(e)
+                if e.code().map_or(false, |c| {
+                    c.code() == SqlState::FOREIGN_KEY_VIOLATION.code()
+                }) =>
+            {
+                Err(e.into_report()).change_context(SetRepoError::Create(Reason::TopicNotFound))
+            }
+            Err(e) => Err(e.into_report()).change_context(SetRepoError::Create(Reason::Db)),
+        }
     }
 
     async fn create_many(
         &self,
-        topic_id: <Self::SetKey as sets_core::SetKey>::TopicId,
+        topic_id: <Self::SetKey as SetKey>::TopicId,
         sets: Vec<NewSet>,
     ) -> RepoResult<Vec<Set<Self::SetKey>>> {
         todo!()
@@ -125,7 +134,7 @@ impl SetRepository for SetRepo {
 
     async fn patch(
         &self,
-        topic_id: <Self::SetKey as sets_core::SetKey>::TopicId,
+        topic_id: <Self::SetKey as SetKey>::TopicId,
         patch: PatchSet,
     ) -> OptRepoResult<Set<Self::SetKey>> {
         todo!()
