@@ -1,7 +1,7 @@
-use crate::postgres::RepoInitErr;
 use crate::postgres::statements::TopicStatements;
+use crate::postgres::{RepoInitErr, sanitize_pagination};
 use deadpool_postgres::{Object, Pool};
-use error_stack::{IntoReport, Report, ResultExt};
+use error_stack::{Report, ResultExt};
 use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
@@ -62,34 +62,6 @@ fn row_to_topic(row: Row) -> Topic<TopicId> {
     )
 }
 
-macro_rules! validate_pagination_field {
-    ($field_name:literal, $field:expr) => {
-        if $field > i64::MAX as u64 {
-            return Err(TopicRepoError::List.into_report()).attach_with(|| {
-                format!(
-                    "{} '{}' is too large and is not supported",
-                    $field_name, $field
-                )
-            });
-        } else {
-            $field as i64
-        }
-    };
-
-    ($field_name:literal, $field:expr => $map:expr) => {
-        if $field > i64::MAX as u64 {
-            return Err(TopicRepoError::List.into_report()).attach_with(|| {
-                format!(
-                    "{} '{}' is too large and is not supported",
-                    $field_name, $field
-                )
-            });
-        } else {
-            $map as i64
-        }
-    };
-}
-
 impl TopicRepository for TopicRepo {
     type TopicId = TopicId;
 
@@ -108,13 +80,15 @@ impl TopicRepository for TopicRepo {
         &self,
         list_criteria: TopicListCriteria,
     ) -> RepoResult<Vec<Topic<Self::TopicId>>> {
-        let page = validate_pagination_field!("page", list_criteria.page() => list_criteria.page().saturating_sub(1));
-        let page_size = validate_pagination_field!("page_size", list_criteria.page_size());
+        let pagination = sanitize_pagination(&list_criteria, TopicRepoError::List)?;
 
         let client = self.client(TopicRepoError::List).await?;
 
         let topics = client
-            .query_raw(&self.statements.list, &[&page, &page_size])
+            .query_raw(
+                &self.statements.list,
+                &[&pagination.page, &pagination.page_size],
+            )
             .await
             .change_context(TopicRepoError::List)?
             .map(|r| r.map(row_to_topic))

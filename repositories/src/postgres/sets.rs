@@ -1,6 +1,6 @@
-use crate::postgres::RepoInitErr;
 use crate::postgres::statements::SetStatements;
 use crate::postgres::topics::TopicId;
+use crate::postgres::{RepoInitErr, sanitize_pagination};
 use deadpool_postgres::{Object, Pool};
 use error_stack::{IntoReport, Report, ResultExt};
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,7 @@ use sets_core::list_filter::SetListCriteria;
 use sets_core::model::{NewSet, PatchSet, Set};
 use sets_core::result::{OptRepoResult, Reason, RepoResult, SetRepoError};
 use sets_core::{SetKey, SetRepository};
+use std::borrow::Borrow;
 use tokio_postgres::Row;
 use tokio_postgres::error::SqlState;
 use utoipa::ToSchema;
@@ -66,7 +67,25 @@ impl SetRepo {
     }
 }
 
-fn row_to_set(row: Row) -> Set<PostgresSetKey> {
+enum GetOutcome {
+    SetNotFound,
+    SetFound(Set<PostgresSetKey>),
+}
+
+impl From<Row> for GetOutcome {
+    fn from(row: Row) -> Self {
+        let set_exists: bool = row.get("set_exists");
+
+        if !set_exists {
+            Self::SetNotFound
+        } else {
+            Self::SetFound(row_to_set(row))
+        }
+    }
+}
+
+fn row_to_set(row: impl Borrow<Row>) -> Set<PostgresSetKey> {
+    let row = row.borrow();
     Set {
         key: PostgresSetKey(TopicId(row.get("topic_id")), SetId(row.get("id"))),
         name: row.get("name"),
@@ -80,12 +99,21 @@ impl SetRepository for SetRepo {
     type SetKey = PostgresSetKey;
 
     async fn get(&self, key: Self::SetKey) -> OptRepoResult<Set<Self::SetKey>> {
-        self.client(SetRepoError::Get)
+        let result = self
+            .client(SetRepoError::Get(Reason::Db))
             .await?
-            .query_opt(&self.statements.get, &[&key.set_id().0, &key.topic_id().0])
+            .query_opt(&self.statements.get, &[&key.topic_id().0, &key.set_id().0])
             .await
-            .change_context(SetRepoError::Get)
-            .map(|r| r.map(row_to_set))
+            .change_context(SetRepoError::Get(Reason::Db))?
+            .map(GetOutcome::from);
+
+        match result {
+            // no topics in database
+            None => Err(SetRepoError::Get(Reason::TopicNotFound).into_report()),
+            // topic in database, but could not find a set with this id associated with the topic id
+            Some(GetOutcome::SetNotFound) => Ok(None),
+            Some(GetOutcome::SetFound(set)) => Ok(Some(set)),
+        }
     }
 
     async fn list(
@@ -93,7 +121,35 @@ impl SetRepository for SetRepo {
         topic_id: <Self::SetKey as SetKey>::TopicId,
         list_criteria: SetListCriteria,
     ) -> RepoResult<Vec<Set<Self::SetKey>>> {
-        todo!()
+        let pagination =
+            sanitize_pagination(&list_criteria, SetRepoError::List(Reason::Validation))?;
+
+        // TODO find a way to do this with RowStream so we're not allocating a new Vec
+        let rows = self
+            .client(SetRepoError::List(Reason::Db))
+            .await?
+            .query(
+                &self.statements.list,
+                &[&topic_id.0, &pagination.page, &pagination.page_size],
+            )
+            .await
+            .change_context(SetRepoError::List(Reason::Db))?;
+
+        // with the structure of the query, we'll get one row of null column values
+        // if the topic does exist. So if the query is empty, this topic didn't exist
+        if rows.is_empty() {
+            Err(SetRepoError::List(Reason::TopicNotFound).into_report())
+        } else {
+            let first = &rows[0];
+
+            let set_id: Option<Uuid> = first.get("id");
+            let sets = if set_id.is_some() {
+                rows.into_iter().map(row_to_set).collect()
+            } else {
+                vec![]
+            };
+            Ok(sets)
+        }
     }
 
     async fn create(

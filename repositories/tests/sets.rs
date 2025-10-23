@@ -1,5 +1,7 @@
+use engine::Pagination;
 use engine::id::Id;
 use rstest::rstest;
+use sets_core::list_filter::SetListCriteria;
 use sets_core::model::NewSet;
 use sets_core::result::{Reason, SetRepoError};
 use sets_core::{SetKey, SetRepository};
@@ -38,7 +40,38 @@ async fn get_no_set_data_returns_none<C, R>(
 #[rstest]
 #[case::postgres(postgres::runtime())]
 #[tokio::test]
-async fn get_no_associated_topic_data_returns_none<C, R>(
+async fn get_topic_not_exist_returns_error<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let _ = runtime
+        .repos
+        .topics()
+        .create(NewTopic::new("topic1", None::<String>))
+        .await
+        .expect("topic creation works");
+
+    let sets = runtime.repos.sets();
+
+    let error = sets
+        .get(runtime.random_set_key())
+        .await
+        .expect_err("get set should fail");
+
+    assert_eq!(
+        &SetRepoError::Get(Reason::TopicNotFound),
+        error.current_context()
+    );
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn get_no_topic_data_returns_error<C, R>(
     #[future(awt)]
     #[case]
     runtime: TestRuntime<C, R>,
@@ -48,10 +81,46 @@ async fn get_no_associated_topic_data_returns_none<C, R>(
 {
     let sets = runtime.repos.sets();
 
-    let set = sets
-        .get(runtime.new_set_key())
+    let error = sets
+        .get(runtime.random_set_key())
         .await
-        .expect("set get success");
+        .expect_err("get set should fail");
+
+    assert_eq!(
+        &SetRepoError::Get(Reason::TopicNotFound),
+        error.current_context()
+    );
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn get_topic_and_set_data_exist_but_set_not_found_returns_none<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let topic = runtime
+        .repos
+        .topics()
+        .create(NewTopic::new("topic1", None::<String>))
+        .await
+        .expect("topic creation works");
+
+    let sets = runtime.repos.sets();
+
+    let _ = sets
+        .create(topic.id, NewSet::new("set1", Some("set1 desc")))
+        .await
+        .expect("created set");
+
+    let set = sets
+        .get(runtime.existing_topic_set_key(topic.id))
+        .await
+        .expect("get set success");
 
     assert!(set.is_none());
 }
@@ -146,6 +215,150 @@ async fn create_topic_does_exist_creates_set<C, R>(
     assert_eq!("set1", &set.name);
     assert_eq!(Some("set1 desc"), set.description.as_deref());
 }
+
+const DEFAULT_PAGINATION: Pagination = Pagination {
+    page: 1,
+    page_size: None,
+};
+const DEFAULT_PAGE_SIZE: u64 = 25;
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn list_no_topic_data_returns_topic_not_exists<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let e = runtime
+        .repos
+        .sets()
+        .list(
+            runtime.random_topic_id(),
+            SetListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE),
+        )
+        .await
+        .expect_err("no topic error");
+
+    println!("{e:?}");
+
+    assert_eq!(
+        &SetRepoError::List(Reason::TopicNotFound),
+        e.current_context()
+    );
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn list_one_topic_exists_but_no_sets_returns_empty_vec<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let topic = runtime
+        .repos
+        .topics()
+        .create(NewTopic::new("topic1", None::<String>))
+        .await
+        .expect("created topic");
+
+    let sets = runtime
+        .repos
+        .sets()
+        .list(
+            topic.id,
+            SetListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE),
+        )
+        .await
+        .expect("empty set vec");
+
+    assert!(sets.is_empty());
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn list_multiple_topics_exists_but_no_sets_returns_empty_vec<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let topics = runtime
+        .repos
+        .topics()
+        .create_many(vec![
+            NewTopic::new("topic1", None::<String>),
+            NewTopic::new("topic2", None::<String>),
+            NewTopic::new("topic3", None::<String>),
+        ])
+        .await
+        .expect("created topics");
+
+    let topic = topics[0].as_ref().expect("successfully created topic");
+
+    let sets = runtime
+        .repos
+        .sets()
+        .list(
+            topic.id,
+            SetListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE),
+        )
+        .await
+        .expect("empty set vec");
+
+    assert!(sets.is_empty());
+}
+
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn list_topic_exists_and_single_set_returns_that_set_in_vec<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let topic = runtime
+        .repos
+        .topics()
+        .create(NewTopic::new("topic1", None::<String>))
+        .await
+        .expect("created topic");
+
+    let sets = runtime.repos.sets();
+
+    let _ = sets
+        .create(topic.id, NewSet::new("set1", Some("set1 desc")))
+        .await
+        .expect("set created");
+
+    let sets = sets
+        .list(
+            topic.id,
+            SetListCriteria::new(DEFAULT_PAGINATION, DEFAULT_PAGE_SIZE),
+        )
+        .await
+        .expect("empty set vec");
+
+    assert_eq!(1, sets.len());
+    let set = &sets[0];
+    assert_eq!("set1", &set.name);
+    assert_eq!(Some("set1 desc"), set.description.as_deref());
+}
+
+// TODO create_many sets and list test
 
 mod postgres {
     use crate::sets::{Repos, TestRuntime};
@@ -251,7 +464,7 @@ where
         (self.set_key_gen)(Some(topic_id), None)
     }
 
-    fn new_set_key(&self) -> R::SetKey {
+    fn random_set_key(&self) -> R::SetKey {
         (self.set_key_gen)(None, None)
     }
 

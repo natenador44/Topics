@@ -3,7 +3,7 @@ use error_stack::Report;
 pub type RepoResult<T> = Result<T, Report<TopicRepoError>>;
 pub type OptRepoResult<T> = Result<Option<T>, Report<TopicRepoError>>;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Copy, Clone)]
 pub enum TopicRepoError {
     #[error("failed to get topic")]
     Get,
@@ -17,7 +17,7 @@ pub enum TopicRepoError {
     Delete,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Copy, Clone)]
 pub enum CreateErrorType {
     #[error("unexpected: failed to match on topic status index")]
     MatchFailure,

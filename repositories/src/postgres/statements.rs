@@ -1,6 +1,6 @@
 use error_stack::{Report, ResultExt};
 use tokio_postgres::types::Type;
-use tokio_postgres::{Client, Statement};
+use tokio_postgres::{Client, GenericClient, Statement};
 
 #[derive(Debug, thiserror::Error)]
 #[error("failed to prepare topics statement")]
@@ -73,10 +73,35 @@ impl TopicStatements {
     }
 }
 
+/*
+Check topics for id = $1.
+    If not found, topic does not exist.
+    If found, join on sets with a matching topic id and the given set id
+        If found, we have found our set
+        If not found, the requested topic does exist, but the set does not
+ */
+const GET_SET: &str = r#"
+SELECT
+  s.id IS NOT NULL AS set_exists,
+  s.*
+FROM topics t
+LEFT JOIN sets s ON s.topic_id = t.id AND s.id = $2
+WHERE t.id = $1;
+"#;
+
+const LIST_SET: &str = r#"
+SELECT
+    s.*
+FROM topics t
+         LEFT JOIN sets s ON s.topic_id = t.id
+WHERE t.id = $1
+OFFSET $2 LIMIT $3;
+"#;
+
 #[derive(Debug, Clone)]
 pub struct SetStatements {
     pub get: Statement,
-    // pub list: Statement,
+    pub list: Statement,
     pub create: Statement,
     // pub patch_name_desc: Statement,
     // pub patch_name: Statement,
@@ -89,8 +114,15 @@ impl SetStatements {
         Ok(Self {
             get: client
                 .prepare_typed(
-                    "select id, topic_id, name, description, created, updated from sets where id = $1 and topic_id = $2",
+                    GET_SET,
                     &[Type::UUID, Type::UUID]
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            list: client
+                .prepare_typed(
+                    LIST_SET,
+                    &[Type::UUID, Type::INT8, Type::INT8],
                 )
                 .await
                 .change_context(StatementPrepareError)?,
