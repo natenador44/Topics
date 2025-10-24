@@ -11,6 +11,8 @@ pub enum SetRepoError {
     Create(Reason),
     #[error("failed to get list of sets: {0}")]
     List(Reason),
+    #[error("failed to create many sets: {0}")]
+    CreateMany(Reason),
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Copy, Clone)]

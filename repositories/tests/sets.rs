@@ -360,6 +360,44 @@ async fn list_topic_exists_and_single_set_returns_that_set_in_vec<C, R>(
 
 // TODO create_many sets and list test
 
+#[rstest]
+#[case::postgres(postgres::runtime())]
+#[tokio::test]
+async fn create_many_no_topics_returns_topic_not_found_error<C, R>(
+    #[future(awt)]
+    #[case]
+    runtime: TestRuntime<C, R>,
+) where
+    C: Image,
+    R: Repos,
+{
+    let topic_id = runtime.random_topic_id();
+
+    let e = runtime
+        .repos
+        .sets()
+        .create_many(
+            topic_id,
+            vec![
+                new_set("set1"),
+                new_set("set2"),
+                new_set("set3"),
+                new_set("set4"),
+            ],
+        )
+        .await
+        .expect_err("topic not found");
+
+    assert_eq!(
+        &SetRepoError::CreateMany(Reason::TopicNotFound),
+        e.current_context(),
+    );
+}
+
+fn new_set(name: &str) -> NewSet {
+    NewSet::new(name, Some(format!("{name} desc")))
+}
+
 mod postgres {
     use crate::sets::{Repos, TestRuntime};
     use repositories::postgres::ConnectionDetails;

@@ -1,3 +1,4 @@
+use crate::postgres::insert_many::{InsertMany, InsertManyBuilder, value_set};
 use crate::postgres::statements::TopicStatements;
 use crate::postgres::{RepoInitErr, sanitize_pagination};
 use deadpool_postgres::{Object, Pool};
@@ -198,109 +199,21 @@ impl TopicRepository for TopicRepo {
     }
 }
 
-struct CreateManyInsert {
-    params: Vec<(TopicId, String, Option<String>)>,
-    query: String,
-}
+fn generate_create_many_insert(new_topics: Vec<NewTopic>) -> Option<InsertMany> {
+    let mut new_topic_iter = new_topics.into_iter();
 
-impl CreateManyInsert {
-    fn builder() -> CreateManyInsertBuilder {
-        CreateManyInsertBuilder {
-            params: Vec::default(),
-        }
+    let first = new_topic_iter.next()?;
+    let mut builder = InsertManyBuilder::new(
+        "topics",
+        ["id", "name", "description"],
+        value_set![TopicId::new().0 => Uuid, first.name => String, first.description => Option<String>],
+    );
+
+    for new_topic in new_topic_iter {
+        builder.add_value_set(value_set![TopicId::new().0 => Uuid, new_topic.name => String, new_topic.description => Option<String>]);
     }
 
-    fn params(&self) -> Vec<&(dyn ToSql + Sync)> {
-        let mut p_ref = Vec::with_capacity(self.params.len());
+    builder.returning(&["id", "name", "description", "created", "updated"]);
 
-        for (id, name, desc) in &self.params {
-            p_ref.push(&id.0 as &(dyn ToSql + Sync));
-            p_ref.push(name as &(dyn ToSql + Sync));
-            p_ref.push(desc as &(dyn ToSql + Sync));
-        }
-
-        p_ref
-    }
-}
-
-struct CreateManyInsertBuilder {
-    params: Vec<(TopicId, String, Option<String>)>,
-}
-
-impl CreateManyInsertBuilder {
-    fn add_new(&mut self, name: String, description: Option<String>) {
-        self.params.push((TopicId::new(), name, description));
-    }
-
-    fn build(self) -> Option<CreateManyInsert> {
-        if self.params.is_empty() {
-            return None;
-        }
-
-        let mut query = String::from("insert into topics (id, name, description) values ");
-        let mut param_count = 0;
-        for (i, _) in self.params.iter().enumerate() {
-            query += &format!(
-                "(${}, ${}, ${})",
-                param_count + 1,
-                param_count + 2,
-                param_count + 3
-            );
-
-            if i < self.params.len() - 1 {
-                query += ", ";
-            }
-            param_count += 3;
-        }
-
-        query += " returning id, name, description, created, updated";
-        Some(CreateManyInsert {
-            params: self.params,
-            query,
-        })
-    }
-}
-
-fn generate_create_many_insert(new_topics: Vec<NewTopic>) -> Option<CreateManyInsert> {
-    let mut builder = CreateManyInsert::builder();
-
-    for new_topic in new_topics {
-        builder.add_new(new_topic.name, new_topic.description)
-    }
-
-    builder.build()
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::postgres::topics::{TopicId, generate_create_many_insert};
-    use chrono::Utc;
-    use topics_core::model::{NewTopic, Topic};
-    use topics_core::{CreateManyFailReason, CreateManyTopicStatus};
-
-    #[test]
-    fn generate_create_many_insert_empty_list_returns_none() {
-        assert!(generate_create_many_insert(vec![]).is_none())
-    }
-
-    #[test]
-    fn generate_create_many_insert_creates_insert_for_all_pending_statuses() {
-        let new_topics = vec![
-            NewTopic::new("topic1", Some("topic1 desc")),
-            NewTopic::new("topic2", Some("topic2 desc")),
-            NewTopic::new("topic3", Some("topic3 desc")),
-        ];
-
-        let insert = generate_create_many_insert(new_topics.clone()).unwrap();
-
-        for i in 1..=3 {
-            let (_, p_name, p_desc) = &insert.params[i - 1];
-            assert_eq!(&new_topics[i - 1].name, p_name);
-            assert_eq!(&new_topics[i - 1].description, p_desc);
-        }
-
-        let expected_query = "insert into topics (id, name, description) values ($1, $2, $3), ($4, $5, $6), ($7, $8, $9) returning id, name, description, created, updated";
-
-        assert_eq!(expected_query, insert.query);
-    }
+    Some(builder.build())
 }

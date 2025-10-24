@@ -22,6 +22,7 @@ tokio-postgres = { workspace = true, features = ["with-uuid-1", "with-chrono-0_4
 uuid = { workspace = true }
 refinery = { version = "0.9.0", features = ["tokio-postgres"] }
 deadpool-postgres = "0.14.1"
+itertools = { workspace = true }
 
 # [features]
 # default = ["mongo-topics"]
@@ -38,3 +39,4 @@ tokio-postgres = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+dyn-eq = "0.1.3"

@@ -1,3 +1,4 @@
+use crate::postgres::insert_many::{InsertMany, InsertManyBuilder, value_set};
 use crate::postgres::statements::SetStatements;
 use crate::postgres::topics::TopicId;
 use crate::postgres::{RepoInitErr, sanitize_pagination};
@@ -11,6 +12,8 @@ use sets_core::{SetKey, SetRepository};
 use std::borrow::Borrow;
 use tokio_postgres::Row;
 use tokio_postgres::error::SqlState;
+use tokio_stream::StreamExt;
+use tracing::warn;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -184,8 +187,41 @@ impl SetRepository for SetRepo {
         &self,
         topic_id: <Self::SetKey as SetKey>::TopicId,
         sets: Vec<NewSet>,
-    ) -> RepoResult<Vec<Set<Self::SetKey>>> {
-        todo!()
+    ) -> RepoResult<Vec<RepoResult<Set<Self::SetKey>>>> {
+        let Some(insert_many) = generate_insert_many(topic_id, sets) else {
+            warn!("no set requests sent to data layer, not creating any new topics");
+            return Ok(vec![]);
+        };
+
+        let results = self
+            .client(SetRepoError::CreateMany(Reason::Db))
+            .await?
+            .query_raw(&insert_many.query, insert_many.params())
+            .await
+            .change_context(SetRepoError::CreateMany(Reason::Db))?
+            .collect::<Vec<_>>()
+            .await;
+
+        let mut set_results = Vec::with_capacity(results.len());
+
+        for (i, row_result) in results.into_iter().enumerate() {
+            match row_result {
+                Ok(row) => set_results.push(Ok(row_to_set(row))),
+                Err(e)
+                    if e.code().map_or(false, |c| {
+                        c.code() == SqlState::FOREIGN_KEY_VIOLATION.code()
+                    }) =>
+                {
+                    return Err(SetRepoError::CreateMany(Reason::TopicNotFound).into_report());
+                }
+                Err(e) => {
+                    warn!("Result row {i} failed: {e}");
+                    set_results.push(Err(SetRepoError::CreateMany(Reason::Db).into_report()));
+                }
+            }
+        }
+
+        Ok(set_results)
     }
 
     async fn patch(
@@ -199,4 +235,31 @@ impl SetRepository for SetRepo {
     async fn delete(&self, key: Self::SetKey) -> OptRepoResult<()> {
         todo!()
     }
+}
+
+fn generate_insert_many(topic_id: TopicId, sets: Vec<NewSet>) -> Option<InsertMany> {
+    let mut set_iter = sets.into_iter();
+
+    let first = set_iter.next()?;
+
+    let mut builder = InsertManyBuilder::new(
+        "sets",
+        ["id", "topic_id", "name", "description"],
+        value_set![SetId::new().0 => Uuid, topic_id.0 => Uuid, first.name => String, first.description => Option<String>],
+    );
+
+    for set in set_iter {
+        builder.add_value_set(value_set![SetId::new().0 => Uuid, topic_id.0 => Uuid, set.name => String, set.description => Option<String>]);
+    }
+
+    builder.returning(&[
+        "id",
+        "topic_id",
+        "name",
+        "description",
+        "created",
+        "updated",
+    ]);
+
+    Some(builder.build())
 }

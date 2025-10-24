@@ -47,7 +47,7 @@ pub trait SetRepository: Clone + Send + Sync + 'static {
         &self,
         topic_id: <Self::SetKey as SetKey>::TopicId,
         sets: Vec<NewSet>,
-    ) -> impl Future<Output = RepoResult<Vec<Set<Self::SetKey>>>> + Send;
+    ) -> impl Future<Output = RepoResult<Vec<RepoResult<Set<Self::SetKey>>>>> + Send;
 
     fn patch(
         &self,

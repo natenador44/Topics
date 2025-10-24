@@ -1,5 +1,6 @@
 // #[cfg(feature = "postgres-topics")]
 pub mod initializer;
+mod insert_many;
 pub mod sets;
 mod statements;
 pub mod topics;
