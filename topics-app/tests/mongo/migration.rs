@@ -28,13 +28,13 @@ pub struct Migration {
 
 enum MigrationStep {
     Fill(usize),
-    FillWith {
-        fill: usize,
-        name: String,
-        description: Option<String>,
-    },
+    // FillWith {
+    //     fill: usize,
+    //     name: String,
+    //     description: Option<String>,
+    // },
     Topic(NewTopicCreated),
-    Topics(Vec<NewTopicCreated>),
+    // Topics(Vec<NewTopicCreated>),
 }
 
 impl Migration {
@@ -47,36 +47,35 @@ impl Migration {
 
     /// Use this if you want to fill in `fill` amount of topics using a specific name and/or description.
     /// Their contents can reliably be tested against
-    pub fn fill_with(
-        mut self,
-        fill: usize,
-        name: impl Into<String>,
-        description: Option<impl Into<String>>,
-    ) -> Self {
-        self.total += fill;
-        self.steps.push(MigrationStep::FillWith {
-            fill,
-            name: name.into(),
-            description: description.map(Into::into),
-        });
-        self
-    }
-
+    // pub fn fill_with(
+    //     mut self,
+    //     fill: usize,
+    //     name: impl Into<String>,
+    //     description: Option<impl Into<String>>,
+    // ) -> Self {
+    //     self.total += fill;
+    //     self.steps.push(MigrationStep::FillWith {
+    //         fill,
+    //         name: name.into(),
+    //         description: description.map(Into::into),
+    //     });
+    //     self
+    // }
     pub fn single(mut self, topic: NewTopicCreated) -> Self {
         self.total += 1;
         self.steps.push(MigrationStep::Topic(topic));
         self
     }
 
-    pub fn multi<I>(mut self, topics: I) -> Self
-    where
-        I: IntoIterator<Item = NewTopicCreated>,
-    {
-        let topics = topics.into_iter().collect::<Vec<_>>();
-        self.total += topics.len();
-        self.steps.push(MigrationStep::Topics(topics));
-        self
-    }
+    // pub fn multi<I>(mut self, topics: I) -> Self
+    // where
+    //     I: IntoIterator<Item = NewTopicCreated>,
+    // {
+    //     let topics = topics.into_iter().collect::<Vec<_>>();
+    //     self.total += topics.len();
+    //     self.steps.push(MigrationStep::Topics(topics));
+    //     self
+    // }
 
     pub async fn run(self, client: Client) -> Vec<ObjectId> {
         let mut topics = Vec::with_capacity(self.total);
@@ -86,16 +85,16 @@ impl Migration {
                 MigrationStep::Fill(fill) => {
                     topics.extend((0..fill).map(|_| generate_filler_topic()))
                 }
-                MigrationStep::FillWith {
-                    fill,
-                    name,
-                    description,
-                } => {
-                    let iter = (0..fill).map(|_| NewTopicCreated::new(&name, description.as_ref()));
-                    topics.extend(iter)
-                }
+                // MigrationStep::FillWith {
+                //     fill,
+                //     name,
+                //     description,
+                // } => {
+                //     let iter = (0..fill).map(|_| NewTopicCreated::new(&name, description.as_ref()));
+                //     topics.extend(iter)
+                // }
                 MigrationStep::Topic(new_topic) => topics.extend([new_topic]),
-                MigrationStep::Topics(new_topics) => topics.extend(new_topics),
+                // MigrationStep::Topics(new_topics) => topics.extend(new_topics),
             }
         }
 

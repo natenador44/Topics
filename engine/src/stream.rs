@@ -36,7 +36,7 @@ where
         I: IntoIterator<Item = T>,
         I::IntoIter: Send + Sync + 'static,
     {
-        Self::new(StatusCode::CREATED, iter)
+        Self::new(StatusCode::OK, iter)
     }
 
     pub fn new<I>(status_code: StatusCode, iter: I) -> Self

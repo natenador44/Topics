@@ -98,7 +98,7 @@ impl<const COLS: usize, T> InsertManyBuilder<COLS, T> {
     pub fn build(self) -> InsertMany {
         let mut query = format!("INSERT INTO {} ", self.table);
 
-        let value_name_segments = Itertools::intersperse(self.col_names.iter().map(|s| *s), ",");
+        let value_name_segments = Itertools::intersperse(self.col_names.iter().copied(), ",");
 
         query.push('(');
         for segment in value_name_segments {
@@ -132,7 +132,7 @@ impl<const COLS: usize, T> InsertManyBuilder<COLS, T> {
         if let Some(returning) = self.returning {
             query += " RETURNING ";
 
-            for segment in Itertools::intersperse(returning.into_iter().map(|s| *s), ",") {
+            for segment in Itertools::intersperse(returning.iter().copied(), ",") {
                 query += segment;
             }
         }

@@ -21,6 +21,12 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct SetId(Uuid);
 
+impl Default for SetId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SetId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
@@ -55,7 +61,7 @@ impl SetRepo {
     pub async fn new(pool: Pool) -> Result<Self, Report<RepoInitErr>> {
         let mut handle = pool.get().await.change_context(RepoInitErr::sets())?;
 
-        let client = &mut *(&mut *handle);
+        let client = &mut **handle;
 
         Ok(Self {
             statements: SetStatements::prepare(client)
@@ -173,9 +179,8 @@ impl SetRepository for SetRepo {
         match result {
             Ok(row) => Ok(row_to_set(row)),
             Err(e)
-                if e.code().map_or(false, |c| {
-                    c.code() == SqlState::FOREIGN_KEY_VIOLATION.code()
-                }) =>
+                if e.code()
+                    .is_some_and(|c| c.code() == SqlState::FOREIGN_KEY_VIOLATION.code()) =>
             {
                 Err(e.into_report()).change_context(SetRepoError::Create(Reason::TopicNotFound))
             }
@@ -208,9 +213,8 @@ impl SetRepository for SetRepo {
             match row_result {
                 Ok(row) => set_results.push(Ok(row_to_set(row))),
                 Err(e)
-                    if e.code().map_or(false, |c| {
-                        c.code() == SqlState::FOREIGN_KEY_VIOLATION.code()
-                    }) =>
+                    if e.code()
+                        .is_some_and(|c| c.code() == SqlState::FOREIGN_KEY_VIOLATION.code()) =>
                 {
                     return Err(SetRepoError::CreateMany(Reason::TopicNotFound).into_report());
                 }
@@ -226,13 +230,13 @@ impl SetRepository for SetRepo {
 
     async fn patch(
         &self,
-        topic_id: <Self::SetKey as SetKey>::TopicId,
-        patch: PatchSet,
+        _topic_id: <Self::SetKey as SetKey>::TopicId,
+        _patch: PatchSet,
     ) -> OptRepoResult<Set<Self::SetKey>> {
         todo!()
     }
 
-    async fn delete(&self, key: Self::SetKey) -> OptRepoResult<()> {
+    async fn delete(&self, _key: Self::SetKey) -> OptRepoResult<()> {
         todo!()
     }
 }

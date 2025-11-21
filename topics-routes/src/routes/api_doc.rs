@@ -24,7 +24,7 @@ pub mod examples {
         });
 
         pub fn bulk_all_success() -> &'static Value {
-            &*BULK_ALL_SUCCESS
+            &BULK_ALL_SUCCESS
         }
 
         static BULK_MIXED_SUCCESS: LazyLock<Value> = LazyLock::new(|| {
@@ -44,7 +44,7 @@ pub mod examples {
         });
 
         pub fn bulk_mixed_success() -> &'static Value {
-            &*BULK_MIXED_SUCCESS
+            &BULK_MIXED_SUCCESS
         }
 
         static BULK_NO_SUCCESS: LazyLock<Value> = LazyLock::new(|| {
@@ -64,7 +64,7 @@ pub mod examples {
         });
 
         pub fn bulk_no_success() -> &'static Value {
-            &*BULK_NO_SUCCESS
+            &BULK_NO_SUCCESS
         }
     }
 }

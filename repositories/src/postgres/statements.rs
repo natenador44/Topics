@@ -1,6 +1,6 @@
 use error_stack::{Report, ResultExt};
 use tokio_postgres::types::Type;
-use tokio_postgres::{Client, GenericClient, Statement};
+use tokio_postgres::{Client, Statement};
 
 #[derive(Debug, thiserror::Error)]
 #[error("failed to prepare topics statement")]

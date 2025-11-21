@@ -4,14 +4,14 @@ use axum::response::IntoResponse;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use tokio::time::Instant;
 
-const TOPICS_RETRIEVED_METRIC_NAME: &'static str = "topics_retrieved";
-const REQUEST_DURATION_METRIC_NAME: &'static str = "http_requests_duration_seconds";
-const REQUEST_SIZE_METRIC_NAME: &'static str = "http_request_size";
+const TOPICS_RETRIEVED_METRIC_NAME: &str = "topics_retrieved";
+const REQUEST_DURATION_METRIC_NAME: &str = "http_requests_duration_seconds";
+const REQUEST_SIZE_METRIC_NAME: &str = "http_request_size";
 
-const TOPICS_CREATED_METRIC_NAME: &'static str = "num_topics_created";
+const TOPICS_CREATED_METRIC_NAME: &str = "num_topics_created";
 
-const TOPICS_DELETED_METRIC_NAME: &'static str = "num_topics_deleted";
-const TOPICS_PATCHED_METRIC_NAME: &'static str = "num_topics_patched";
+const TOPICS_DELETED_METRIC_NAME: &str = "num_topics_deleted";
+const TOPICS_PATCHED_METRIC_NAME: &str = "num_topics_patched";
 
 pub fn setup_recorder() -> PrometheusHandle {
     const EXPONENTIAL_SECONDS: &[f64] = &[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
@@ -33,7 +33,7 @@ pub fn setup_recorder() -> PrometheusHandle {
         .unwrap()
 }
 
-const REQUESTS_TOTAL_METRIC_NAME: &'static str = "http_requests_total";
+const REQUESTS_TOTAL_METRIC_NAME: &str = "http_requests_total";
 
 pub async fn track_http(req: Request, next: Next) -> impl IntoResponse {
     // TODO figure out what "matched path" is

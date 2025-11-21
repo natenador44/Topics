@@ -93,7 +93,7 @@ async fn create_single_then_list_returns_single_result<C, R>(
     let listed = repo.list(default_list_criteria()).await.unwrap();
 
     assert_eq!(1, listed.len());
-    assert_eq!(&created, listed.get(0).unwrap());
+    assert_eq!(&created, listed.first().unwrap());
 }
 
 #[rstest]
@@ -121,7 +121,7 @@ async fn list_page_1_or_0_returns_first_page<C, R>(
         .unwrap();
 
     assert_eq!(1, listed.len());
-    assert_eq!(&created, listed.get(0).unwrap(), "page = 1");
+    assert_eq!(&created, listed.first().unwrap(), "page = 1");
 
     let listed = repo
         .list(TopicListCriteria::new(
@@ -132,7 +132,7 @@ async fn list_page_1_or_0_returns_first_page<C, R>(
         .unwrap();
 
     assert_eq!(1, listed.len());
-    assert_eq!(&created, listed.get(0).unwrap(), "page = 0");
+    assert_eq!(&created, listed.first().unwrap(), "page = 0");
 }
 
 #[rstest]
@@ -696,7 +696,7 @@ where
 }
 
 mod mongo {
-    use crate::topics::TestRuntime;
+    use super::TestRuntime;
     use bson::oid::ObjectId;
     use repositories::mongodb::topics as mongo_repo;
     use testcontainers_modules::mongo::Mongo;
@@ -719,25 +719,27 @@ mod mongo {
         })
     }
 
-    async fn container() -> ContainerAsync<Mongo> {
+    pub async fn container() -> ContainerAsync<Mongo> {
         Mongo::default().start().await.unwrap()
     }
 }
 
 mod postgres {
-    use crate::topics::TestRuntime;
+    use super::TestRuntime;
     use repositories::postgres::ConnectionDetails;
     use repositories::postgres::initializer::RepoInitializer;
     use repositories::postgres::topics as postgres_repo;
     use repositories::postgres::topics::TopicId;
     use testcontainers_modules::postgres::Postgres;
+    use testcontainers_modules::testcontainers::ContainerAsync;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
 
     pub async fn runtime() -> TestRuntime<Postgres, postgres_repo::TopicRepo> {
-        let container = crate::postgres::container().await;
+        let container = container().await;
         let host = container.get_host().await.unwrap();
         let port = container.get_host_port_ipv4(5432).await.unwrap();
 
-        let repo = RepoInitializer::new()
+        let repo = RepoInitializer::default()
             .with_topics()
             .init(
                 ConnectionDetails::Url(format!(
@@ -748,6 +750,16 @@ mod postgres {
             .await
             .unwrap();
 
-        TestRuntime::new(container, repo, || TopicId::new())
+        TestRuntime::new(container, repo, TopicId::new)
+    }
+
+    pub async fn container() -> ContainerAsync<Postgres> {
+        Postgres::default()
+            .with_db_name("topics")
+            .with_user("testuser")
+            .with_password("testpass")
+            .start()
+            .await
+            .unwrap()
     }
 }

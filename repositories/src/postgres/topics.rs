@@ -19,6 +19,11 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy)]
 #[serde(transparent)]
 pub struct TopicId(pub Uuid);
+impl Default for TopicId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl TopicId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
@@ -38,7 +43,7 @@ impl TopicRepo {
     pub async fn new(pool: Pool) -> Result<Self, Report<RepoInitErr>> {
         let mut handle = pool.get().await.change_context(RepoInitErr::topics())?;
 
-        let client = &mut *(&mut *handle);
+        let client = &mut **handle;
 
         Ok(Self {
             statements: TopicStatements::prepare(client)
@@ -96,7 +101,7 @@ impl TopicRepository for TopicRepo {
             .collect::<Result<_, _>>()
             .await;
 
-        Ok(topics.change_context(TopicRepoError::List)?)
+        topics.change_context(TopicRepoError::List)
     }
 
     async fn create(&self, new_topic: NewTopic) -> RepoResult<Topic<Self::TopicId>> {

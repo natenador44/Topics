@@ -141,7 +141,7 @@ where
     async fn run_migrations(&self, pool: &Pool) -> Result<(), Report<RepoInitErr>> {
         let mut handle = pool.get().await.change_context(RepoInitErr::sets())?;
 
-        let client = &mut **(&mut *handle);
+        let client = &mut **handle;
 
         let migrations = self.initializer.migrations()?;
 
@@ -153,11 +153,13 @@ where
     }
 }
 
-impl RepoInitializer<()> {
-    pub fn new() -> Self {
+impl Default for RepoInitializer<()> {
+    fn default() -> Self {
         Self { initializer: () }
     }
+}
 
+impl RepoInitializer<()> {
     pub fn with_topics(self) -> RepoInitializer<TopicInit> {
         RepoInitializer {
             initializer: TopicInit,

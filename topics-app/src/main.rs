@@ -2,7 +2,6 @@ use axum::Router;
 use dotenv::dotenv;
 use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
-use repositories::mongodb::topics::TopicRepo;
 use repositories::postgres::initializer::RepoInitializer;
 use topics_core::TopicRepository;
 use topics_routes::state::TopicAppState;
@@ -67,14 +66,14 @@ async fn build_routes() -> AppResult<Router> {
 
 #[instrument]
 async fn build_repo() -> AppResult<repositories::postgres::topics::TopicRepo> {
-    use repositories::postgres::{ConnectionDetails, topics::TopicRepo};
+    use repositories::postgres::ConnectionDetails;
 
     let db_connection_str = std::env::var("DATABASE_URL")
         .change_context(AppError)
         .attach("DATABASE_URL is missing")?;
 
     debug!("initializing mongodb repository");
-    RepoInitializer::new()
+    RepoInitializer::default()
         .with_topics()
         .init(ConnectionDetails::Url(db_connection_str), None)
         .await

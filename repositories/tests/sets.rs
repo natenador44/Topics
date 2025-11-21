@@ -399,12 +399,15 @@ fn new_set(name: &str) -> NewSet {
 }
 
 mod postgres {
-    use crate::sets::{Repos, TestRuntime};
+
+    use super::{Repos, TestRuntime};
     use repositories::postgres::ConnectionDetails;
     use repositories::postgres::initializer::RepoInitializer;
     use repositories::postgres::sets::{PostgresSetKey, SetId, SetRepo};
     use repositories::postgres::topics::{TopicId, TopicRepo};
     use testcontainers_modules::postgres::Postgres;
+    use testcontainers_modules::testcontainers::ContainerAsync;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
 
     pub struct PostgresRepos {
         topics: TopicRepo,
@@ -428,7 +431,7 @@ mod postgres {
     }
 
     pub async fn runtime() -> TestRuntime<Postgres, PostgresRepos> {
-        let container = crate::postgres::container().await;
+        let container = container().await;
         let host = container.get_host().await.unwrap();
         let port = container.get_host_port_ipv4(5432).await.unwrap();
 
@@ -436,7 +439,7 @@ mod postgres {
             "postgresql://testuser:testpass@{host}:{port}/topics"
         ));
 
-        let (topics, sets) = RepoInitializer::new()
+        let (topics, sets) = RepoInitializer::default()
             .with_sets()
             .init(connection_details, Some(1))
             .await
@@ -445,6 +448,15 @@ mod postgres {
         TestRuntime::new(container, PostgresRepos { topics, sets }, generate_set_key)
     }
 
+    pub async fn container() -> ContainerAsync<Postgres> {
+        Postgres::default()
+            .with_db_name("topics")
+            .with_user("testuser")
+            .with_password("testpass")
+            .start()
+            .await
+            .unwrap()
+    }
     fn generate_set_key(topic_id: Option<TopicId>, set_id: Option<SetId>) -> PostgresSetKey {
         match (topic_id, set_id) {
             (Some(t), Some(s)) => PostgresSetKey(t, s),
