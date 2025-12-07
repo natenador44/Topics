@@ -107,7 +107,6 @@ pub struct SetStatements {
     pub patch_name: Statement,
     pub patch_desc: Statement,
     pub delete: Statement,
-    pub topic_exists: Statement,
 }
 
 impl SetStatements {
