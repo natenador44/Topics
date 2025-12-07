@@ -103,10 +103,11 @@ pub struct SetStatements {
     pub get: Statement,
     pub list: Statement,
     pub create: Statement,
-    // pub patch_name_desc: Statement,
-    // pub patch_name: Statement,
-    // pub patch_desc: Statement,
-    // pub delete: Statement,
+    pub patch_name_desc: Statement,
+    pub patch_name: Statement,
+    pub patch_desc: Statement,
+    pub delete: Statement,
+    pub topic_exists: Statement,
 }
 
 impl SetStatements {
@@ -130,6 +131,34 @@ impl SetStatements {
                 .prepare_typed(
                     "insert into sets (id, topic_id, name, description) values ($1, $2, $3, $4) returning id, topic_id, name, description, created, updated",
                     &[Type::UUID, Type::UUID, Type::VARCHAR, Type::VARCHAR],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            patch_name_desc: client
+                .prepare_typed(
+                    "update sets set name = $1, description = $2 where id = $3 and topic_id = $4, updated = now() returning id, topic_id, name, description, created, updated",
+                    &[Type::VARCHAR, Type::VARCHAR, Type::UUID, Type::UUID],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            patch_name: client
+                .prepare_typed(
+                    "update sets set name = $1, updated = now() where id = $2 and topic_id = $3 returning id, topic_id, name, description, created, updated",
+                    &[Type::VARCHAR, Type::UUID, Type::UUID],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            patch_desc: client
+                .prepare_typed(
+                    "update sets set description = $1, updated = now() where id = $2 and topic_id = $3 returning id, topic_id, name, description, created, updated",
+                    &[Type::VARCHAR, Type::UUID, Type::UUID],
+                )
+                .await
+                .change_context(StatementPrepareError)?,
+            delete: client
+                .prepare_typed(
+                    "delete from sets where id = $1 and topic_id = $2",
+                    &[Type::UUID, Type::UUID]
                 )
                 .await
                 .change_context(StatementPrepareError)?,

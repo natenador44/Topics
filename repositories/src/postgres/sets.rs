@@ -4,14 +4,17 @@ use crate::postgres::topics::TopicId;
 use crate::postgres::{RepoInitErr, sanitize_pagination};
 use deadpool_postgres::{Object, Pool};
 use error_stack::{IntoReport, Report, ResultExt};
+use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use sets_core::list_filter::SetListCriteria;
 use sets_core::model::{NewSet, PatchSet, Set};
 use sets_core::result::{OptRepoResult, Reason, RepoResult, SetRepoError};
 use sets_core::{SetKey, SetRepository};
 use std::borrow::Borrow;
+use std::pin::pin;
 use tokio_postgres::Row;
 use tokio_postgres::error::SqlState;
+use tokio_postgres::types::ToSql;
 use tokio_stream::StreamExt;
 use tracing::warn;
 use utoipa::ToSchema;
@@ -198,18 +201,19 @@ impl SetRepository for SetRepo {
             return Ok(vec![]);
         };
 
-        let results = self
+        let stream = self
             .client(SetRepoError::CreateMany(Reason::Db))
             .await?
             .query_raw(&insert_many.query, insert_many.params())
             .await
-            .change_context(SetRepoError::CreateMany(Reason::Db))?
-            .collect::<Vec<_>>()
-            .await;
+            .change_context(SetRepoError::CreateMany(Reason::Db))?;
 
-        let mut set_results = Vec::with_capacity(results.len());
+        let mut set_results = Vec::new();
 
-        for (i, row_result) in results.into_iter().enumerate() {
+        let mut stream = pin!(stream);
+        let mut i = 0;
+
+        while let Some(row_result) = stream.next().await {
             match row_result {
                 Ok(row) => set_results.push(Ok(row_to_set(row))),
                 Err(e)
@@ -223,21 +227,75 @@ impl SetRepository for SetRepo {
                     set_results.push(Err(SetRepoError::CreateMany(Reason::Db).into_report()));
                 }
             }
+            i += 1;
         }
 
         Ok(set_results)
     }
 
-    async fn patch(
-        &self,
-        _topic_id: <Self::SetKey as SetKey>::TopicId,
-        _patch: PatchSet,
-    ) -> OptRepoResult<Set<Self::SetKey>> {
-        todo!()
+    async fn patch(&self, key: Self::SetKey, patch: PatchSet) -> OptRepoResult<Set<Self::SetKey>> {
+        let (stmt, params) = match (&patch.name, &patch.description) {
+            (Some(n), Field::Present(d)) => (
+                &self.statements.patch_name_desc,
+                &[
+                    n as &(dyn ToSql + Sync),
+                    d as &(dyn ToSql + Sync),
+                    &key.1.0 as &(dyn ToSql + Sync),
+                    &key.0.0 as &(dyn ToSql + Sync),
+                ] as &[&(dyn ToSql + Sync)],
+            ),
+            (Some(n), Field::Missing) => (
+                &self.statements.patch_name,
+                &[
+                    n as &(dyn ToSql + Sync),
+                    &key.1.0 as &(dyn ToSql + Sync),
+                    &key.0.0 as &(dyn ToSql + Sync),
+                ] as &[&(dyn ToSql + Sync)],
+            ),
+            (None, Field::Present(d)) => (
+                &self.statements.patch_desc,
+                &[
+                    d as &(dyn ToSql + Sync),
+                    &key.1.0 as &(dyn ToSql + Sync),
+                    &key.0.0 as &(dyn ToSql + Sync),
+                ] as &[&(dyn ToSql + Sync)],
+            ),
+            (None, Field::Missing) => (
+                &self.statements.get,
+                &[
+                    &key.1.0 as &(dyn ToSql + Sync),
+                    &key.0.0 as &(dyn ToSql + Sync),
+                ] as &[&(dyn ToSql + Sync)],
+            ),
+        };
+
+        let result = self
+            .client(SetRepoError::Patch(Reason::Db))
+            .await?
+            .query_opt(stmt, params)
+            .await
+            .change_context(SetRepoError::Patch(Reason::Db))?
+            .map(GetOutcome::from);
+
+        match result {
+            // no topics in database
+            None => Err(SetRepoError::Patch(Reason::TopicNotFound).into_report()),
+            // topic in database, but could not find a set with this id associated with the topic id
+            Some(GetOutcome::SetNotFound) => Ok(None),
+            Some(GetOutcome::SetFound(set)) => Ok(Some(set)),
+        }
     }
 
-    async fn delete(&self, _key: Self::SetKey) -> OptRepoResult<()> {
-        todo!()
+    // TODO check if topic exists if delete does nothing
+    async fn delete(&self, key: Self::SetKey) -> OptRepoResult<()> {
+        let deleted = self
+            .client(SetRepoError::Delete(Reason::Db))
+            .await?
+            .execute(&self.statements.delete, &[&key.1.0, &key.0.0])
+            .await
+            .change_context(SetRepoError::Delete(Reason::Db))?;
+
+        if deleted == 0 { Ok(None) } else { Ok(Some(())) }
     }
 }
 

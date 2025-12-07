@@ -13,6 +13,10 @@ pub enum SetRepoError {
     List(Reason),
     #[error("failed to create many sets: {0}")]
     CreateMany(Reason),
+    #[error("failed to patch set: {0}")]
+    Patch(Reason),
+    #[error("failed to delete set: {0}")]
+    Delete(Reason),
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Copy, Clone)]

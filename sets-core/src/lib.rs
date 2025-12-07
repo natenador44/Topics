@@ -51,7 +51,7 @@ pub trait SetRepository: Clone + Send + Sync + 'static {
 
     fn patch(
         &self,
-        topic_id: <Self::SetKey as SetKey>::TopicId,
+        key: Self::SetKey,
         patch: PatchSet,
     ) -> impl Future<Output = OptRepoResult<Set<Self::SetKey>>> + Send;
 
