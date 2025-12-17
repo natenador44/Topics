@@ -402,7 +402,7 @@ mod postgres {
 
     use super::{Repos, TestRuntime};
     use repositories::postgres::ConnectionDetails;
-    use repositories::postgres::initializer::RepoInitializer;
+    use repositories::postgres::initializer::RepoCreator;
     use repositories::postgres::sets::{PostgresSetKey, SetId, SetRepo};
     use repositories::postgres::topics::{TopicId, TopicRepo};
     use testcontainers_modules::postgres::Postgres;
@@ -439,9 +439,9 @@ mod postgres {
             "postgresql://testuser:testpass@{host}:{port}/topics"
         ));
 
-        let (topics, sets) = RepoInitializer::default()
+        let (topics, sets) = RepoCreator::default()
             .with_sets()
-            .init(connection_details, Some(1))
+            .create(connection_details, Some(1))
             .await
             .expect("repo initialization success");
 

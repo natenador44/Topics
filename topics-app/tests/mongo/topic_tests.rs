@@ -530,13 +530,18 @@ fn init() -> () {
     init_logging();
 }
 
+// all of these tests will fail right now, because of the oauth config stuff
 #[fixture]
 async fn runtime() -> TestRuntime {
     let container = Mongo::default().start().await.unwrap();
     let client = create_client(&container).await;
-    let routes = topics_routes::routes::build(TopicAppState::new_without_metrics(TestEngine {
-        repo: TopicRepo::new(client.clone()),
-    }));
+    let routes = topics_routes::routes::build(
+        TopicAppState::new_without_metrics(TestEngine {
+            repo: TopicRepo::new(client.clone()),
+        })
+        .await
+        .expect("routes are built"),
+    );
 
     TestRuntime {
         _container: container,

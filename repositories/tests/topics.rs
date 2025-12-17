@@ -727,7 +727,7 @@ mod mongo {
 mod postgres {
     use super::TestRuntime;
     use repositories::postgres::ConnectionDetails;
-    use repositories::postgres::initializer::RepoInitializer;
+    use repositories::postgres::initializer::RepoCreator;
     use repositories::postgres::topics as postgres_repo;
     use repositories::postgres::topics::TopicId;
     use testcontainers_modules::postgres::Postgres;
@@ -739,9 +739,9 @@ mod postgres {
         let host = container.get_host().await.unwrap();
         let port = container.get_host_port_ipv4(5432).await.unwrap();
 
-        let repo = RepoInitializer::default()
+        let repo = RepoCreator::default()
             .with_topics()
-            .init(
+            .create(
                 ConnectionDetails::Url(format!(
                     "postgresql://testuser:testpass@{host}:{port}/topics"
                 )),

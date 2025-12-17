@@ -63,7 +63,7 @@ pub enum ConnectionDetails {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("failed to initialize postgres {0} repo")]
+#[error("failed to initialize postgres repo: {0}")]
 pub struct RepoInitErr(&'static str);
 impl RepoInitErr {
     fn topics() -> Self {
@@ -78,3 +78,7 @@ impl RepoInitErr {
         Self("all")
     }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("failed to run migrations for postgres repo")]
+pub struct RepoMigrationErr;

@@ -17,5 +17,10 @@ utoipa = { workspace = true, features = ["axum_extras", "uuid"] }
 utoipa-axum = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 optional-field = { workspace = true }
+const_format = { workspace = true }
 metrics = "0.24.2"
 metrics-exporter-prometheus = "0.17.2"
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+itertools = { workspace = true }
+reqwest = { version = "0.12.25", features = ["json"] }
+dotenv = "0.15.0"

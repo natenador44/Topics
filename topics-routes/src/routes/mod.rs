@@ -1,3 +1,4 @@
+use crate::auth::{self, ProtectedRouter, Roles};
 use crate::error::TopicServiceError;
 use crate::metrics;
 use crate::routes::requests::{BulkCreateTopicRequest, TopicPatchRequest};
@@ -74,12 +75,20 @@ pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
 
 fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
     let main_router = OpenApiRouter::new()
-        .route(TOPIC_LIST_PATH, get(list_topics))
-        .route(TOPIC_GET_PATH, get(get_topic))
-        .route(TOPIC_CREATE_PATH, post(create_topic))
-        .route(TOPIC_BULK_CREATE_PATH, post(bulk_create_topics))
-        .route(TOPIC_DELETE_PATH, delete(delete_topic))
-        .route(TOPIC_PATCH_PATH, patch(patch_topic));
+        .protected_route(TOPIC_LIST_PATH, get(list_topics), Roles::TOPIC_READ)
+        .protected_route(TOPIC_GET_PATH, get(get_topic), Roles::TOPIC_READ)
+        .protected_route(TOPIC_CREATE_PATH, post(create_topic), Roles::TOPIC_WRITE)
+        .protected_route(
+            TOPIC_BULK_CREATE_PATH,
+            post(bulk_create_topics),
+            Roles::TOPIC_WRITE,
+        )
+        .protected_route(TOPIC_DELETE_PATH, delete(delete_topic), Roles::TOPIC_WRITE)
+        .protected_route(
+            TOPIC_PATCH_PATH,
+            patch(patch_topic),
+            Roles::TOPIC_WRITE | Roles::TOPIC_READ,
+        );
 
     let router = if app_state.metrics_enabled {
         info!("metrics enabled, setting up metrics handler");
@@ -95,6 +104,10 @@ fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
 
     OpenApiRouter::new()
         .nest(TOPIC_ROOT_PATH, router)
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            auth::validate_token,
+        ))
         .with_state(app_state)
 }
 

@@ -135,7 +135,7 @@ impl SetStatements {
                 .change_context(StatementPrepareError)?,
             patch_name_desc: client
                 .prepare_typed(
-                    "update sets set name = $1, description = $2 where id = $3 and topic_id = $4, updated = now() returning id, topic_id, name, description, created, updated",
+                    "update sets set name = $1, description = $2, updated = now() where id = $3 and topic_id = $4 returning id, topic_id, name, description, created, updated",
                     &[Type::VARCHAR, Type::VARCHAR, Type::UUID, Type::UUID],
                 )
                 .await

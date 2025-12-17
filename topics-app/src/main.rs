@@ -2,7 +2,7 @@ use axum::Router;
 use dotenv::dotenv;
 use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
-use repositories::postgres::initializer::RepoInitializer;
+use repositories::postgres::initializer::RepoCreator;
 use topics_core::TopicRepository;
 use topics_routes::state::TopicAppState;
 use tracing::{debug, error, info, instrument, warn};
@@ -41,11 +41,13 @@ async fn try_main() -> AppResult<()> {
 }
 
 async fn build_routes() -> AppResult<Router> {
-    let engine = build_repo().await?;
+    let repo = build_repo().await?;
 
     debug!("building routes..");
     Ok(topics_routes::routes::build(
-        TopicAppState::new_with_metrics(TopicEngine::new(engine)),
+        TopicAppState::new_with_metrics(TopicEngine::new(repo))
+            .await
+            .change_context(AppError)?,
     ))
     .inspect(|_| debug!("routes built"))
 }
@@ -72,10 +74,10 @@ async fn build_repo() -> AppResult<repositories::postgres::topics::TopicRepo> {
         .change_context(AppError)
         .attach("DATABASE_URL is missing")?;
 
-    debug!("initializing mongodb repository");
-    RepoInitializer::default()
+    debug!("initializing repository");
+    RepoCreator::default()
         .with_topics()
-        .init(ConnectionDetails::Url(db_connection_str), None)
+        .create(ConnectionDetails::Url(db_connection_str), None)
         .await
         .change_context(AppError)
 }
