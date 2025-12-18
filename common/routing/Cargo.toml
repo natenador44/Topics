@@ -18,9 +18,15 @@ axum-streams = { workspace = true }
 axum = { workspace = true }
 mongodb = { workspace = true }
 tower-http = { workspace = true}
+metrics = "0.24.2"
+metrics-exporter-prometheus = "0.17.2"
 tower = { workspace = true}
 tracing = { workspace = true }
 tokio = { workspace = true }
+utoipa-axum.workspace = true
+utoipa-swagger-ui.workspace = true
+jsonwebtoken = "10.2.0"
+reqwest = "0.12.26"
 
 [dev-dependencies]
 mockall = "0.13.1"

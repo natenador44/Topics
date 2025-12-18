@@ -4,6 +4,7 @@ use dotenv::dotenv;
 use error_stack::ResultExt;
 use error_stack::fmt::ColorMode;
 use repositories::postgres::initializer::RepoCreator;
+use routing::AuthState;
 use topics_core::TopicRepository;
 use topics_routes::state::TopicAppState;
 use tracing::{debug, error, info, instrument, warn};
@@ -51,6 +52,7 @@ async fn build_routes() -> AppResult<Router> {
         TopicAppState::new_with_metrics(TopicEngine::new(repo))
             .await
             .change_context(AppError)?,
+        AuthState::create().await.change_context(AppError)?,
     ))
     .inspect(|_| debug!("routes built"))
 }

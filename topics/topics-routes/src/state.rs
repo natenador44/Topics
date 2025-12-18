@@ -1,21 +1,13 @@
-use std::sync::Arc;
-
-use crate::{
-    auth::{Jwk, Jwks, OAuthConfig},
-    service::TopicService,
-};
+use crate::service::TopicService;
 use axum::extract::FromRef;
-use error_stack::{Report, ResultExt};
-use tokio::sync::RwLock;
+use error_stack::Report;
 use topics_core::TopicEngine;
-use tracing::{debug, error, info, instrument};
+use tracing::{info, instrument};
 
 #[derive(Clone)]
 pub struct TopicAppState<T: TopicEngine> {
     pub service: TopicService<T>,
     pub metrics_enabled: bool,
-    pub jwks_keys: Arc<RwLock<Vec<Jwk>>>,
-    pub oauth_config: OAuthConfig,
 }
 
 pub type StateResult<T> = Result<T, Report<StateErr>>;
@@ -36,48 +28,11 @@ impl<T: TopicEngine> TopicAppState<T> {
     #[instrument(skip(engine))]
     async fn new(engine: T, metrics_enabled: bool) -> StateResult<Self> {
         info!("creating new topic state");
-        let oauth_config = OAuthConfig::from_env().change_context(StateErr)?;
-        debug!("OAuth Config: {oauth_config:?}");
-        let jwks = refresh_jwks(&oauth_config.jwks_url)
-            .await
-            .change_context(StateErr)?;
-
         Ok(Self {
             service: TopicService::new(engine),
             metrics_enabled,
-            jwks_keys: Arc::new(RwLock::new(jwks)),
-            oauth_config,
         })
     }
-
-    #[instrument(skip(self))]
-    pub async fn find_jwk_key(&self, kid: &str) -> Option<Jwk> {
-        let keys = self.jwks_keys.read().await;
-        keys.iter().find(|k| k.kid == kid).cloned()
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("failed to retrieve jwks data")]
-struct JwksErr;
-
-#[instrument]
-async fn refresh_jwks(jwks_uri: &str) -> Result<Vec<Jwk>, Report<JwksErr>> {
-    info!("fetching JWKS");
-
-    let jwks: Jwks = reqwest::get(jwks_uri)
-        .await
-        .change_context(JwksErr)?
-        .json()
-        .await
-        .change_context(JwksErr)?;
-
-    if jwks.keys.is_empty() {
-        error!("no jwks were found");
-    } else {
-        info!("found {} jwks", jwks.keys.len());
-    }
-    Ok(jwks.keys)
 }
 
 impl<T: TopicEngine + Clone> FromRef<TopicAppState<T>> for TopicService<T> {
@@ -85,3 +40,10 @@ impl<T: TopicEngine + Clone> FromRef<TopicAppState<T>> for TopicService<T> {
         input.service.clone()
     }
 }
+
+// it would be cool if I could do this for token validation so I don't have to pass this state around
+// impl<T: TopicEngine + Clone> FromRef<TopicAppState<T>> for AuthState {
+//     fn from_ref(input: &TopicAppState<T>) -> Self {
+//         input.validate_token_state.clone()
+//     }
+// }

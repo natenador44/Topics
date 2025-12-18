@@ -2320,8 +2320,12 @@ dependencies = [
  "chrono",
  "const_format",
  "error-stack",
+ "jsonwebtoken",
+ "metrics",
+ "metrics-exporter-prometheus",
  "mongodb",
  "optional-field",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror",
@@ -2331,6 +2335,8 @@ dependencies = [
  "tower-http",
  "tracing",
  "utoipa",
+ "utoipa-axum",
+ "utoipa-swagger-ui",
  "uuid",
 ]
 

@@ -1,35 +1,32 @@
-use crate::auth::{self, ProtectedRouter, Roles};
+use crate::auth::TopicRoles;
 use crate::error::TopicServiceError;
 use crate::metrics;
 use crate::routes::requests::{BulkCreateTopicRequest, TopicPatchRequest};
 use crate::routes::responses::{BulkCreateResponse, TopicError};
 use crate::service::{CreateManyTopic, PatchOutcome, TopicCreation, TopicService};
 use crate::state::TopicAppState;
-use axum::middleware::{self};
-use axum::routing::patch;
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response, Result},
-    routing::{delete, get, post},
 };
 use requests::CreateTopicRequest;
 use responses::TopicResponse;
+use routing::AuthState;
 use routing::error::EndpointError;
 use routing::list_criteria::ListFilter;
 use routing::pagination::Pagination;
+use routing::router::RouterBuilder;
 use routing::stream::StreamingResponse;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use topics_core::TopicEngine;
 use topics_core::list_filter::TopicFilter;
 use topics_core::model::Topic;
-use tracing::{info, instrument};
+use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa::ToSchema;
-use utoipa_axum::router::OpenApiRouter;
-use utoipa_swagger_ui::SwaggerUi;
 
 mod api_doc;
 mod requests;
@@ -65,50 +62,32 @@ const TOPIC_BULK_CREATE_PATH: &str = "/bulk";
 const TOPIC_DELETE_PATH: &str = "/{topic_id}";
 const TOPIC_PATCH_PATH: &str = "/{topic_id}";
 
-pub fn build<T: TopicEngine>(app_state: TopicAppState<T>) -> Router {
-    let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .merge(routes(app_state))
-        .split_for_parts();
-
-    router.merge(SwaggerUi::new("/topics/swagger-ui").url("/topics/api-docs/openapi.json", api))
-}
-
-fn routes<S, T: TopicEngine>(app_state: TopicAppState<T>) -> OpenApiRouter<S> {
-    let main_router = OpenApiRouter::new()
-        .protected_route(TOPIC_LIST_PATH, get(list_topics), Roles::TOPIC_READ)
-        .protected_route(TOPIC_GET_PATH, get(get_topic), Roles::TOPIC_READ)
-        .protected_route(TOPIC_CREATE_PATH, post(create_topic), Roles::TOPIC_WRITE)
-        .protected_route(
+pub fn build<T: TopicEngine>(
+    app_state: TopicAppState<T>,
+    validate_token_state: AuthState,
+) -> Router {
+    let builder = RouterBuilder::new(TOPIC_ROOT_PATH)
+        .role_protected_get(TOPIC_LIST_PATH, list_topics, TopicRoles::TOPIC_READ)
+        .role_protected_get(TOPIC_GET_PATH, get_topic, TopicRoles::TOPIC_READ)
+        .role_protected_post(TOPIC_CREATE_PATH, create_topic, TopicRoles::TOPIC_WRITE)
+        .role_protected_post(
             TOPIC_BULK_CREATE_PATH,
-            post(bulk_create_topics),
-            Roles::TOPIC_WRITE,
+            bulk_create_topics,
+            TopicRoles::TOPIC_WRITE,
         )
-        .protected_route(TOPIC_DELETE_PATH, delete(delete_topic), Roles::TOPIC_WRITE)
-        .protected_route(
-            TOPIC_PATCH_PATH,
-            patch(patch_topic),
-            Roles::TOPIC_WRITE | Roles::TOPIC_READ,
-        );
+        .role_protected_delete(TOPIC_DELETE_PATH, delete_topic, TopicRoles::TOPIC_WRITE)
+        .role_protected_patch(TOPIC_PATCH_PATH, patch_topic, TopicRoles::TOPIC_WRITE);
 
-    let router = if app_state.metrics_enabled {
-        info!("metrics enabled, setting up metrics handler");
-        let metrics_recorder = metrics::setup_recorder();
-        main_router
-            .route("/metrics", get(|| async move { metrics_recorder.render() }))
-            .route_layer(middleware::from_fn(metrics::track_http))
+    if app_state.metrics_enabled {
+        builder.build_with_metrics(
+            app_state,
+            validate_token_state,
+            ApiDoc::openapi(),
+            metrics::setup_recorder(),
+        )
     } else {
-        info!("metrics not enabled, setting up service unavailable metrics handler");
-        main_router
-            .route("/metrics", get(|| async { (StatusCode::SERVICE_UNAVAILABLE, "Metrics endpoint is disabled. Metrics must be enabled and the service restarted")}))
-    };
-
-    OpenApiRouter::new()
-        .nest(TOPIC_ROOT_PATH, router)
-        .layer(middleware::from_fn_with_state(
-            app_state.clone(),
-            auth::validate_token,
-        ))
-        .with_state(app_state)
+        builder.build_no_metrics(app_state, validate_token_state, ApiDoc::openapi())
+    }
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
