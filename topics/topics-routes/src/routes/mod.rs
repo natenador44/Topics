@@ -14,12 +14,12 @@ use axum::{
     response::{IntoResponse, Response, Result},
     routing::{delete, get, post},
 };
-use engine::Pagination;
-use engine::error::EndpointError;
-use engine::list_criteria::ListFilter;
-use engine::stream::StreamingResponse;
 use requests::CreateTopicRequest;
 use responses::TopicResponse;
+use routing::error::EndpointError;
+use routing::list_criteria::ListFilter;
+use routing::pagination::Pagination;
+use routing::stream::StreamingResponse;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use topics_core::TopicEngine;

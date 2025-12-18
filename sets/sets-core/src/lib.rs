@@ -1,7 +1,7 @@
 use crate::list_filter::SetListCriteria;
 use crate::model::{NewSet, PatchSet, Set};
 use crate::result::{OptRepoResult, RepoResult};
-use engine::id::Id;
+use ids::Id;
 use std::fmt::Debug;
 
 pub mod model;

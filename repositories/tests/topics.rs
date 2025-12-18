@@ -1,5 +1,5 @@
-use engine::Pagination;
 use optional_field::Field;
+use routing::pagination::Pagination;
 use rstest::rstest;
 use testcontainers_modules::testcontainers::{ContainerAsync, Image};
 use topics_core::TopicRepository;

@@ -1,7 +1,8 @@
+use apps::{AppError, AppProperties, AppResult};
 use axum::Router;
 use dotenv::dotenv;
-use engine::app::{AppError, AppProperties, AppResult};
 use error_stack::ResultExt;
+use error_stack::fmt::ColorMode;
 use repositories::postgres::initializer::RepoCreator;
 use topics_core::TopicRepository;
 use topics_routes::state::TopicAppState;
@@ -21,6 +22,8 @@ async fn main() {
 }
 
 fn init_logging() {
+    error_stack::Report::set_color_mode(ColorMode::None);
+
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_env("TOPICS_LOG"))
@@ -37,7 +40,7 @@ async fn try_main() -> AppResult<()> {
 
     let routes = build_routes().await?;
 
-    engine::app::run(routes, AppProperties { port: 3001 }).await
+    apps::run(routes, AppProperties { port: 3001 }).await
 }
 
 async fn build_routes() -> AppResult<Router> {

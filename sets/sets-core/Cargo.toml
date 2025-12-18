@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-engine = { path = "../engine" }
+routing = { path = "../../common/routing" }
+ids = { path = "../../common/ids" }
 serde = { workspace = true }
 utoipa = { workspace = true }
 error-stack = { workspace = true }

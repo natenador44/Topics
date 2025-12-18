@@ -1,4 +1,4 @@
-use engine::id::Id;
+use ids::Id;
 use list_filter::TopicListCriteria;
 use model::{NewTopic, PatchTopic, Topic};
 use result::{OptRepoResult, RepoResult};

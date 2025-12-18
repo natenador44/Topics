@@ -1,5 +1,5 @@
-use engine::Pagination;
-use engine::list_criteria::{ListCriteria, ListFilter, Tag};
+use routing::list_criteria::{ListCriteria, ListFilter, Tag};
+use routing::pagination::Pagination;
 
 pub enum TopicFilter {
     Name(String),

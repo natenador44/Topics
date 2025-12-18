@@ -25,3 +25,7 @@ target
 .idea/
 .env
 **/bacon.toml
+
+# directory automatically configured to not be picked up by git, so files needed for local development
+# that shouldn't be committed can go here
+**/.ignore

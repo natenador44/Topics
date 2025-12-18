@@ -4,25 +4,26 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-engine = { path = "../engine" }
-serde = { workspace = true }
-chrono = { workspace = true }
-utoipa = { workspace = true }
-error-stack = { workspace = true }
-thiserror = { workspace = true }
-tokio-stream = { workspace = true }
-optional-field = { workspace = true }
-tracing = { workspace = true }
-tokio = { workspace = true }
-topics-core = { path = "../topics-core" }
-sets-core = { path = "../sets-core" }
-mongodb = { workspace = true }
+ids = { path = "../common/ids" }
+routing = { path = "../common/routing" }
+chrono = "0.4.42"
+utoipa = "5.4.0"
+error-stack = "0.6.0"
+thiserror = "2.0.16"
+tokio-stream = "0.1.17"
+optional-field = "0.1.6"
+tracing = "0.1.41"
+tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
+topics-core = { path = "../topics/topics-core" }
+sets-core = { path = "../sets/sets-core" }
+mongodb = "3.3.0"
 bson = { version = "2.15.0", features = ["chrono-0_4"] }
-tokio-postgres = { workspace = true, features = ["with-uuid-1", "with-chrono-0_4"] }
-uuid = { workspace = true }
+uuid = { version = "1.17.0", features = ["v7"] }
 refinery = { version = "0.9.0", features = ["tokio-postgres"] }
 deadpool-postgres = "0.14.1"
-itertools = { workspace = true }
+tokio-postgres = { version = "0.7.15", features = ["with-uuid-1", "with-chrono-0_4"] }
+serde = { version = "1.0.228" }
+itertools = "0.14.0"
 
 # [features]
 # default = ["mongo-topics"]
@@ -35,8 +36,6 @@ axum-test = "18.1.0"
 futures = "0.3.31"
 rstest = "0.26.1"
 testcontainers-modules = { version = "0.13.0", features = ["postgres", "mongo"] }
-tokio-postgres = { workspace = true }
-chrono = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.142"
 dyn-eq = "0.1.3"

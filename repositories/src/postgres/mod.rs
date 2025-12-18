@@ -5,8 +5,8 @@ pub mod sets;
 mod statements;
 pub mod topics;
 
-use engine::list_criteria::ListCriteria;
 use error_stack::Report;
+use routing::list_criteria::ListCriteria;
 use std::error::Error;
 
 macro_rules! validate_pagination_field {
@@ -72,10 +72,6 @@ impl RepoInitErr {
 
     fn sets() -> Self {
         Self("sets")
-    }
-
-    fn all() -> Self {
-        Self("all")
     }
 }
 
