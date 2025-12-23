@@ -7,7 +7,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, warn};
 
 use crate::auth::user::AuthedUser;
 
@@ -18,7 +18,6 @@ pub trait Roles: FromStr + Display + Clone + Send + Sync + 'static {
     fn add(&mut self, other: Self);
 }
 
-#[instrument(skip_all)]
 pub async fn require_roles<R: Roles>(
     State(required_roles): State<R>,
     req: Request<Body>,

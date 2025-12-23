@@ -6,7 +6,7 @@ use optional_field::Field;
 use topics_core::list_filter::TopicListCriteria;
 use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicEngine, TopicRepository};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, instrument};
 
 pub struct TopicCreation {
     name: String,
@@ -67,6 +67,7 @@ where
             .change_context(TopicServiceError)?;
 
         if topic.is_some() {
+            debug!("topic {id:?} found!");
             metrics::increment_topics_retrieved();
         }
 
@@ -84,6 +85,7 @@ where
             .await
             .change_context(TopicServiceError)?;
 
+        debug!("{} topics found", topics.len());
         metrics::increment_topics_retrieved_by(topics.len());
         Ok(topics)
     }
@@ -97,7 +99,7 @@ where
             .await
             .change_context(TopicServiceError)?;
 
-        info!("created topics");
+        debug!("created topic");
         metrics::increment_topics_created();
         Ok(topic)
     }
@@ -162,7 +164,7 @@ where
             }
         }
 
-        info!(
+        debug!(
             "created {} out of {} requested topics",
             created_topics_count,
             statuses.len(),
@@ -181,7 +183,7 @@ where
             .change_context(TopicServiceError)?;
 
         if deleted.is_some() {
-            info!("deleted topic");
+            debug!("deleted topic {topic_id:?}");
             metrics::increment_topics_deleted();
         }
 
@@ -212,6 +214,7 @@ where
             .change_context(TopicServiceError)?;
 
         if topic.is_some() {
+            debug!("patched {topic_id:?}");
             metrics::increment_topics_patched();
         }
         Ok(topic

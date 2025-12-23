@@ -5,6 +5,7 @@ use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use error_stack::{IntoReport, Report, ResultExt};
 use std::str::FromStr;
 use tokio_postgres::{Client, Config, NoTls};
+use tracing::debug;
 
 mod embedded {
     pub mod topics {
@@ -148,7 +149,9 @@ where
         if let Some(pool_size) = pool_size {
             pool_builder = pool_builder.max_size(pool_size);
         }
+        debug!("building connection pool..");
         let pool = pool_builder.build().change_context(RepoCreationErr)?;
+        debug!("connection pool built, running migrations");
 
         self.run_migrations(&pool)
             .await

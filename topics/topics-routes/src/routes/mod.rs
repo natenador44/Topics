@@ -62,10 +62,7 @@ const TOPIC_BULK_CREATE_PATH: &str = "/bulk";
 const TOPIC_DELETE_PATH: &str = "/{topic_id}";
 const TOPIC_PATCH_PATH: &str = "/{topic_id}";
 
-pub fn build<T: TopicEngine>(
-    app_state: TopicAppState<T>,
-    validate_token_state: AuthState,
-) -> Router {
+pub fn build<T: TopicEngine>(app_state: TopicAppState<T>, auth_state: AuthState) -> Router {
     let builder = RouterBuilder::new(TOPIC_ROOT_PATH)
         .role_protected_get(TOPIC_LIST_PATH, list_topics, TopicRoles::TOPIC_READ)
         .role_protected_get(TOPIC_GET_PATH, get_topic, TopicRoles::TOPIC_READ)
@@ -81,12 +78,12 @@ pub fn build<T: TopicEngine>(
     if app_state.metrics_enabled {
         builder.build_with_metrics(
             app_state,
-            validate_token_state,
+            auth_state,
             ApiDoc::openapi(),
             metrics::setup_recorder(),
         )
     } else {
-        builder.build_no_metrics(app_state, validate_token_state, ApiDoc::openapi())
+        builder.build_no_metrics(app_state, auth_state, ApiDoc::openapi())
     }
 }
 

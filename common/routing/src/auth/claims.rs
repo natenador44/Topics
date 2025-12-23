@@ -36,7 +36,7 @@ impl Claims {
                 None => {
                     return AuthedUser {
                         id: self.sub.into(),
-                        // email: self.email.map(|e| e.into()),
+                        email: self.email.map(|e| e.into()),
                         roles: R::none(),
                     };
                 }
@@ -57,7 +57,7 @@ impl Claims {
 
         AuthedUser {
             id: self.sub.into(),
-            // email: self.email.map(|e| e.into()),
+            email: self.email.map(|e| e.into()),
             roles,
         }
     }

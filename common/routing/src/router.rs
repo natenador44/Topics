@@ -241,28 +241,17 @@ where
         self
     }
 
-    pub fn build_no_metrics(
-        self,
-        app_state: S,
-        validate_token_state: AuthState,
-        api_doc: OpenApi,
-    ) -> Router {
+    pub fn build_no_metrics(self, app_state: S, auth_state: AuthState, api_doc: OpenApi) -> Router {
         self.log_routes();
         let main_router = self.inner
             .route("/metrics", get(|| async { (StatusCode::SERVICE_UNAVAILABLE, "Metrics endpoint is disabled. Metrics must be enabled and the service restarted")}));
-        build::<S, R>(
-            self.root_path,
-            main_router,
-            app_state,
-            validate_token_state,
-            api_doc,
-        )
+        build::<S, R>(self.root_path, main_router, app_state, auth_state, api_doc)
     }
 
     pub fn build_with_metrics(
         self,
         app_state: S,
-        validate_token_state: AuthState,
+        auth_state: AuthState,
         api_doc: OpenApi,
         metrics_handle: PrometheusHandle,
     ) -> Router {
@@ -273,13 +262,7 @@ where
             .route("/metrics", get(|| async move { metrics_handle.render() }))
             .route_layer(middleware::from_fn(metrics::track_http));
 
-        build::<S, R>(
-            self.root_path,
-            main_router,
-            app_state,
-            validate_token_state,
-            api_doc,
-        )
+        build::<S, R>(self.root_path, main_router, app_state, auth_state, api_doc)
     }
 
     fn log_routes(&self) {
@@ -293,7 +276,7 @@ fn build<S, R>(
     root_path: &'static str,
     main_router: OpenApiRouter<S>,
     app_state: S,
-    validate_token_state: AuthState,
+    auth_state: AuthState,
     api_doc: OpenApi,
 ) -> Router
 where
@@ -304,7 +287,7 @@ where
     let main_routes = OpenApiRouter::new()
         .nest(root_path, main_router)
         .layer(middleware::from_fn_with_state(
-            validate_token_state,
+            auth_state,
             validate_token::<R>,
         ))
         // TODO metrics

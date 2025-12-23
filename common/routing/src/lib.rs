@@ -12,16 +12,20 @@ pub mod pagination;
 pub mod stream;
 
 mod auth;
+#[cfg(test)]
+pub use auth::oauth::{Jwk, Jwks};
+
 mod metrics;
 pub mod router;
 
 pub use auth::{
+    oauth::OAuthConfig,
     roles::Roles,
     token::{AuthState, validate_token},
 };
 
 #[derive(Debug, Clone)]
-struct ArwLock<T>(Arc<RwLock<T>>);
+pub struct ArwLock<T>(Arc<RwLock<T>>);
 impl<T> ArwLock<T> {
     pub fn new(data: T) -> Self {
         Self(Arc::new(RwLock::new(data)))

@@ -5,7 +5,7 @@ use crate::auth::roles::Roles;
 #[derive(Debug, Clone)]
 pub struct AuthedUser<R> {
     pub id: Arc<str>,
-    // pub email: Option<Arc<str>>,
+    pub email: Option<Arc<str>>,
     pub roles: R,
 }
 

@@ -71,7 +71,9 @@ pub struct Jwk {
     // pub kty: String,
     // #[serde(rename = "use")]
     // pub key_use: Option<String>,
+    // modulus
     pub n: String,
+    // exponent
     pub e: String,
     // pub alg: String,
 }

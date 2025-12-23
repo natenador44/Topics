@@ -9,7 +9,7 @@ use axum::{
 };
 use error_stack::{Report, ResultExt};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     ArwLock,
@@ -33,6 +33,12 @@ pub struct AuthStateCreationErr;
 impl AuthState {
     pub async fn create() -> Result<Self, Report<AuthStateCreationErr>> {
         let oauth_config = OAuthConfig::from_env().change_context(AuthStateCreationErr)?;
+        Self::create_with(oauth_config).await
+    }
+
+    pub async fn create_with(
+        oauth_config: OAuthConfig,
+    ) -> Result<Self, Report<AuthStateCreationErr>> {
         let jwks = refresh_jwks_from_url(&oauth_config.jwks_url)
             .await
             .change_context(AuthStateCreationErr)?;
@@ -76,7 +82,6 @@ async fn refresh_jwks_from_url(jwks_uri: &str) -> Result<Vec<Jwk>, Report<Refres
     Ok(jwks.keys)
 }
 
-#[instrument(skip_all)]
 pub async fn validate_token<R>(
     State(state): State<AuthState>,
     mut request: Request<Body>,
@@ -134,8 +139,18 @@ where
             .claims
             .into_authed_user::<R>(&state.oauth_config.roles_claims_path);
 
-        info!("Token validated for user '{}'", authed_user.id);
-        info!("User roles: {}", authed_user.roles,);
+        tracing::Span::current().record("user_id", authed_user.id.to_string());
+        match &authed_user.email {
+            Some(email) => {
+                debug!(
+                    "token validated for '{email}'. roles: {}",
+                    authed_user.roles
+                );
+            }
+            None => {
+                debug!("token validated. user's roles: {}", authed_user.roles)
+            }
+        }
 
         request.extensions_mut().insert(authed_user);
     }
