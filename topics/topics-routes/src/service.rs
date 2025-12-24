@@ -8,6 +8,9 @@ use topics_core::model::{NewTopic, PatchTopic, Topic};
 use topics_core::{CreateManyFailReason, CreateManyTopicStatus, TopicEngine, TopicRepository};
 use tracing::{debug, error, instrument};
 
+#[cfg(test)]
+mod tests;
+
 pub struct TopicCreation {
     name: String,
     description: Option<String>,

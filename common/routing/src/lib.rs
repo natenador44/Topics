@@ -24,7 +24,7 @@ pub use auth::{
     token::{AuthState, validate_token},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ArwLock<T>(Arc<RwLock<T>>);
 impl<T> ArwLock<T> {
     pub fn new(data: T) -> Self {

@@ -1,6 +1,6 @@
-use crate::auth::TopicRoles;
 use crate::error::TopicServiceError;
 use crate::metrics;
+use crate::roles::TopicRoles;
 use crate::routes::requests::{BulkCreateTopicRequest, TopicPatchRequest};
 use crate::routes::responses::{BulkCreateResponse, TopicError};
 use crate::service::{CreateManyTopic, PatchOutcome, TopicCreation, TopicService};

@@ -5,6 +5,9 @@ pub mod sets;
 mod statements;
 pub mod topics;
 
+#[cfg(test)]
+pub mod topic_test_repos;
+
 use error_stack::Report;
 use routing::list_criteria::ListCriteria;
 use std::error::Error;

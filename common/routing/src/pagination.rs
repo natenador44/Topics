@@ -12,6 +12,15 @@ pub struct Pagination {
     pub page_size: Option<u64>,
 }
 
+impl Default for Pagination {
+    fn default() -> Self {
+        Self {
+            page: Default::default(),
+            page_size: Default::default(),
+        }
+    }
+}
+
 impl Pagination {
     pub fn with_default_page_size(page: u64) -> Self {
         Self {

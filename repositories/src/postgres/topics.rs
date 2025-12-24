@@ -16,7 +16,7 @@ use tracing::warn;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq, Clone, Copy, Hash)]
 #[serde(transparent)]
 pub struct TopicId(pub Uuid);
 impl Default for TopicId {

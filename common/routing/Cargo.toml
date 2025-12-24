@@ -25,8 +25,8 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 utoipa-axum.workspace = true
 utoipa-swagger-ui.workspace = true
-jsonwebtoken = "10.2.0"
-reqwest = "0.12.26"
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+reqwest = { version = "0.12.26", features = ["json"] }
 
 [dev-dependencies]
 mockall = "0.13.1"

@@ -144,7 +144,7 @@ impl FromStr for TopicRoles {
 mod tests {
     use routing::Roles;
 
-    use crate::auth::TopicRoles;
+    use super::TopicRoles;
 
     #[test]
     fn roles_contains() {

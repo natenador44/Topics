@@ -8,15 +8,8 @@ use tokio_postgres::{Client, Config, NoTls};
 use tracing::debug;
 
 mod embedded {
-    pub mod topics {
-        use refinery::embed_migrations;
-        embed_migrations!("./src/postgres/migrations/topics");
-    }
-
-    pub mod sets {
-        use refinery::embed_migrations;
-        embed_migrations!("./src/postgres/migrations/sets");
-    }
+    use refinery::embed_migrations;
+    embed_migrations!("./src/postgres/migrations");
 }
 
 pub trait Init {
@@ -91,7 +84,7 @@ impl Init for TopicInit {
     }
 
     async fn run_migrations(&self, client: &mut Client) -> Result<(), Report<RepoMigrationErr>> {
-        embedded::topics::migrations::runner()
+        embedded::migrations::runner()
             .run_async(client)
             .await
             .change_context(RepoMigrationErr)
@@ -109,7 +102,7 @@ impl Init for SetInit {
     }
 
     async fn run_migrations(&self, client: &mut Client) -> Result<(), Report<RepoMigrationErr>> {
-        embedded::sets::migrations::runner()
+        embedded::migrations::runner()
             .run_async(client)
             .await
             .change_context(RepoMigrationErr)
