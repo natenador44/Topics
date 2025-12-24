@@ -29,3 +29,10 @@ target
 # directory automatically configured to not be picked up by git, so files needed for local development
 # that shouldn't be committed can go here
 **/.ignore
+
+scripts/bin/
+scripts/lib/
+scripts/lib64/
+scripts/lib64
+scripts/include/
+scripts/pyvenv.cfg
