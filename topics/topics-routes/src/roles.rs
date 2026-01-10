@@ -46,13 +46,13 @@ impl Default for TopicRoles {
     }
 }
 
-/// An iterator over the individual roles stored in the `Roles` bitflag.
+/// An iterator over the individual roles stored in the `TopicRoles` bitflag.
 /// ```rust
-/// let roles = Roles::TOPIC_WRITE | Roles::TOPIC_READ;
+/// let roles = TopicRoles::TOPIC_WRITE | TopicRoles::TOPIC_READ;
 /// let mut itr = roles.iter();
 ///
-/// assert_eq!(Some(Roles::TOPIC_READ), itr.next());
-/// assert_eq!(Some(Roles::TOPIC_WRITE), itr.next());
+/// assert_eq!(Some(TopicRoles::TOPIC_READ), itr.next());
+/// assert_eq!(Some(TopicRoles::TOPIC_WRITE), itr.next());
 /// assert_eq!(None, itr.next());
 /// ```
 struct RolesIter {
