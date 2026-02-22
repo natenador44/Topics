@@ -81,7 +81,8 @@ where
         &self,
         list_criteria: TopicListCriteria,
     ) -> ServiceResult<Vec<Topic<T::TopicId>>> {
-        let topics = self
+        let page_size = list_criteria.page_size() as usize;
+        let mut topics = self
             .engine
             .repo()
             .list(list_criteria)
@@ -90,6 +91,12 @@ where
 
         debug!("{} topics found", topics.len());
         metrics::increment_topics_retrieved_by(topics.len());
+
+        if topics.len() > page_size {
+            // in case repo returns more than requested, truncate here
+            topics.truncate(page_size);
+        }
+
         Ok(topics)
     }
 

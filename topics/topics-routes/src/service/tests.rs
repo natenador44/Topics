@@ -1,93 +1,23 @@
+use error_stack::IntoReport;
+use routing::pagination::Pagination;
 use topics_core::{
-    TopicEngine, TopicRepository,
+    TopicEngine,
     list_filter::TopicListCriteria,
-    model::{NewTopic, PatchTopic, Topic},
-    result::{OptRepoResult, RepoResult, TopicRepoError},
+    mock::{MockTopicRepository, matchers},
+    model::{NewTopic, Topic},
+    result::TopicRepoError,
 };
 
-type Id = i32;
+type Id = usize;
 
-use crate::service::TopicService;
-
-#[derive(Clone)]
-struct MockRepo {
-    get: fn(Id) -> OptRepoResult<Topic<Id>>,
-    list: fn(TopicListCriteria) -> RepoResult<Vec<Topic<Id>>>,
-    create: fn(NewTopic) -> RepoResult<Topic<Id>>,
-    create_many: fn(Vec<NewTopic>) -> RepoResult<Vec<RepoResult<Topic<Id>>>>,
-    patch: fn(Id, PatchTopic) -> OptRepoResult<Topic<Id>>,
-    delete: fn(Id) -> OptRepoResult<()>,
-}
-
-impl Default for MockRepo {
-    fn default() -> Self {
-        Self {
-            get: |_| panic!("'get' called unexpectedly"),
-            list: |_| panic!("'list' called unexpectedly"),
-            create: |_| panic!("'create' called unexpectdly"),
-            create_many: |_| panic!("'create_many' called unexpectedly"),
-            patch: |_, _| panic!("'patch' called unexpectedly"),
-            delete: |_| panic!("'delete' called unexpectedly"),
-        }
-    }
-}
-
-impl TopicRepository for MockRepo {
-    type TopicId = Id;
-
-    fn get(
-        &self,
-        id: Self::TopicId,
-    ) -> impl Future<Output = OptRepoResult<Topic<Self::TopicId>>> + Send {
-        let val = (self.get)(id);
-        async move { val }
-    }
-
-    fn list(
-        &self,
-        list_criteria: TopicListCriteria,
-    ) -> impl Future<Output = RepoResult<Vec<Topic<Self::TopicId>>>> + Send {
-        let val = (self.list)(list_criteria);
-        async move { val }
-    }
-
-    fn create(
-        &self,
-        new_topic: NewTopic,
-    ) -> impl Future<Output = RepoResult<Topic<Self::TopicId>>> + Send {
-        let val = (self.create)(new_topic);
-        async move { val }
-    }
-
-    fn create_many(
-        &self,
-        topics: Vec<NewTopic>,
-    ) -> impl Future<Output = RepoResult<Vec<RepoResult<Topic<Self::TopicId>>>>> + Send {
-        let val = (self.create_many)(topics);
-        async move { val }
-    }
-
-    fn patch(
-        &self,
-        id: Self::TopicId,
-        patch: PatchTopic,
-    ) -> impl Future<Output = OptRepoResult<Topic<Self::TopicId>>> + Send {
-        let val = (self.patch)(id, patch);
-        async move { val }
-    }
-
-    fn delete(&self, id: Self::TopicId) -> impl Future<Output = OptRepoResult<()>> + Send {
-        let val = (self.delete)(id);
-        async move { val }
-    }
-}
+use crate::service::{TopicCreation, TopicService};
 
 #[derive(Clone)]
-struct TestEngine(MockRepo);
+struct TestEngine(MockTopicRepository<Id>);
 impl TopicEngine for TestEngine {
     type TopicId = Id;
 
-    type Repo = MockRepo;
+    type Repo = MockTopicRepository<Id>;
 
     fn repo(&self) -> Self::Repo {
         self.0.clone()
@@ -96,10 +26,184 @@ impl TopicEngine for TestEngine {
 
 #[tokio::test]
 async fn get_repo_returns_none_service_returns_none() {
-    let service = TopicService::new(TestEngine(MockRepo {
-        get: |_| Ok(None),
-        ..Default::default()
-    }));
+    let mut repo = MockTopicRepository::default();
+    repo.get_mock.returning(|| Ok(None));
+    let service = build_service(repo.clone());
 
     assert!(service.get(1).await.unwrap().is_none());
+
+    repo.get_mock.assert_invocation_count(1);
+}
+
+#[tokio::test]
+async fn get_repo_returns_topic_service_returns_it_unmodified() {
+    const EXPECTED_ID: usize = 1;
+    const EXPECTED_NAME: &str = "topic 1";
+    const EXPECTED_DESC: &str = "topic 1 desc";
+    let mut repo = MockTopicRepository::default();
+
+    repo.get_mock
+        .with_arg_match(matchers::eq(EXPECTED_ID))
+        .returning(|| {
+            Ok(Some(Topic::create(
+                1usize,
+                EXPECTED_NAME.into(),
+                Some(EXPECTED_DESC.into()),
+            )))
+        });
+
+    let service = build_service(repo.clone());
+
+    let topic = service
+        .get(EXPECTED_ID)
+        .await
+        .expect("get should succeed")
+        .expect("topic should exist");
+
+    assert_eq!(EXPECTED_ID, topic.id);
+    assert_eq!(EXPECTED_NAME, &topic.name);
+    assert_eq!(Some(EXPECTED_DESC), topic.description.as_deref());
+
+    repo.get_mock.assert_invocation_count(1);
+}
+
+#[tokio::test]
+async fn get_repo_returns_err_service_returns_err() {
+    let mut repo = MockTopicRepository::default();
+    repo.get_mock
+        .returning(|| Err(TopicRepoError::Get.into_report()));
+    let service = build_service(repo.clone());
+
+    assert!(service.get(1).await.is_err());
+
+    repo.get_mock.assert_invocation_count(1);
+}
+
+const DEFAULT_PAGE_SIZE: u64 = 25;
+
+#[tokio::test]
+async fn list_no_data_in_repo_returns_empty_vec() {
+    let mut repo = MockTopicRepository::default();
+    repo.list_mock.returning(|| Ok(vec![]));
+    let service = build_service(repo.clone());
+
+    assert_eq!(
+        Vec::<Topic<Id>>::new(),
+        service
+            .list(default_list_criteria())
+            .await
+            .expect("list should succeed")
+    );
+
+    repo.list_mock.assert_invocation_count(1);
+}
+
+#[tokio::test]
+async fn list_returns_all_topics_returned_from_repo_if_le_page_size() {
+    let mut repo = MockTopicRepository::default();
+    repo.list_mock.returning(|| Ok(create_topics(NUM_TOPICS)));
+
+    const NUM_TOPICS: usize = 20;
+    let service = build_service(repo.clone());
+
+    assert_eq!(
+        NUM_TOPICS,
+        service
+            .list(default_list_criteria())
+            .await
+            .expect("list should succeed")
+            .len()
+    );
+
+    repo.list_mock.assert_invocation_count(1);
+}
+
+#[tokio::test]
+async fn list_truncates_topics_returned_from_repo_if_gt_page_size() {
+    const NUM_TOPICS: usize = DEFAULT_PAGE_SIZE as usize + 5;
+
+    let mut repo = MockTopicRepository::default();
+    repo.list_mock
+        .returning(|| Ok(create_topics(NUM_TOPICS)))
+        .with_arg_match(matchers::eq(default_list_criteria()));
+
+    let service = build_service(repo.clone());
+
+    assert_eq!(
+        DEFAULT_PAGE_SIZE as usize,
+        service
+            .list(default_list_criteria())
+            .await
+            .expect("list should succeed")
+            .len()
+    );
+
+    repo.list_mock.assert_invocation_count(1);
+}
+
+#[tokio::test]
+async fn list_returns_error_if_repo_returns_error() {
+    let mut repo = MockTopicRepository::default();
+    repo.list_mock
+        .returning(|| Err(TopicRepoError::List.into_report()))
+        .with_arg_match(matchers::eq(default_list_criteria()));
+
+    let service = build_service(repo.clone());
+
+    let _ = service
+        .list(default_list_criteria())
+        .await
+        .expect_err("list should return error");
+
+    repo.list_mock.assert_invocation_count(1);
+}
+
+#[tokio::test]
+async fn create_calls_repo_create_with_passed_in_name_and_desc_and_does_not_modify() {
+    const EXPECTED_NAME: &str = "topic 1";
+    const EXPECTED_DESC: &str = "topic 1 desc";
+
+    let new_topic = NewTopic::new(EXPECTED_NAME, Some(EXPECTED_DESC));
+
+    let mut repo = MockTopicRepository::default();
+    repo.create_mock
+        .with_arg_match(matchers::eq(new_topic))
+        .returning(|| {
+            Ok(Topic::create(
+                1usize,
+                EXPECTED_NAME.into(),
+                Some(EXPECTED_DESC.into()),
+            ))
+        });
+
+    let service = build_service(repo.clone());
+
+    let new_topic = service
+        .create(TopicCreation::new(
+            EXPECTED_NAME.into(),
+            Some(EXPECTED_DESC.into()),
+        ))
+        .await
+        .expect("create topic succeeds");
+
+    assert_eq!(EXPECTED_NAME, &new_topic.name);
+    assert_eq!(Some(EXPECTED_DESC), new_topic.description.as_deref());
+
+    repo.create_mock.assert_invocation_count(1);
+}
+
+// TODO test that metrics are called, caching, etc.. too much work for now
+
+fn build_service(repo: MockTopicRepository<usize>) -> TopicService<TestEngine> {
+    TopicService::new(TestEngine(repo))
+}
+
+fn create_topics(amt: usize) -> Vec<Topic<Id>> {
+    (0..amt)
+        .map(|i| Topic::create(i, format!("topic {i}"), Some(format!("topic {i} desc"))))
+        .collect()
+}
+
+fn default_list_criteria() -> TopicListCriteria {
+    TopicListCriteria::new(Pagination::default(), DEFAULT_PAGE_SIZE)
 }

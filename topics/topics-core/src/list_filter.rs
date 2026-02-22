@@ -1,6 +1,7 @@
 use routing::list_criteria::{ListCriteria, ListFilter, Tag};
 use routing::pagination::Pagination;
 
+#[derive(Debug, PartialEq)]
 pub enum TopicFilter {
     Name(String),
 }

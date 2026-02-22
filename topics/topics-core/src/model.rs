@@ -3,7 +3,7 @@ use optional_field::Field;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct NewTopic {
     pub name: String,
     pub description: Option<String>,
@@ -18,6 +18,7 @@ impl NewTopic {
     }
 }
 
+#[derive(Debug)]
 pub struct PatchTopic {
     pub name: Option<String>,
     pub description: Field<String>,
