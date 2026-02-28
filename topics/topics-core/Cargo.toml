@@ -10,5 +10,6 @@ error-stack = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 utoipa = { workspace = true }
+itertools = { workspace = true }
 routing = { path = "../../common/routing/"}
 ids = { path = "../../common/ids" }

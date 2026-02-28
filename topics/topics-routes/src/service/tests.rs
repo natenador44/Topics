@@ -27,12 +27,16 @@ impl TopicEngine for TestEngine {
 #[tokio::test]
 async fn get_repo_returns_none_service_returns_none() {
     let mut repo = MockTopicRepository::default();
-    repo.get_mock.returning(|| Ok(None));
+    repo.get_mock
+        .when_called_with(matchers::anything())
+        .then_return(|| Ok(None));
     let service = build_service(repo.clone());
 
     assert!(service.get(1).await.unwrap().is_none());
 
-    repo.get_mock.assert_invocation_count(1);
+    repo.get_mock
+        .verify_call_with(matchers::anything())
+        .was_called_only_once();
 }
 
 #[tokio::test]
@@ -43,8 +47,8 @@ async fn get_repo_returns_topic_service_returns_it_unmodified() {
     let mut repo = MockTopicRepository::default();
 
     repo.get_mock
-        .with_arg_match(matchers::eq(EXPECTED_ID))
-        .returning(|| {
+        .when_called_with(matchers::eq(EXPECTED_ID))
+        .then_return(|| {
             Ok(Some(Topic::create(
                 1usize,
                 EXPECTED_NAME.into(),
@@ -64,19 +68,24 @@ async fn get_repo_returns_topic_service_returns_it_unmodified() {
     assert_eq!(EXPECTED_NAME, &topic.name);
     assert_eq!(Some(EXPECTED_DESC), topic.description.as_deref());
 
-    repo.get_mock.assert_invocation_count(1);
+    repo.get_mock
+        .verify_call_with(matchers::eq(EXPECTED_ID))
+        .was_called_only_once();
 }
 
 #[tokio::test]
 async fn get_repo_returns_err_service_returns_err() {
     let mut repo = MockTopicRepository::default();
     repo.get_mock
-        .returning(|| Err(TopicRepoError::Get.into_report()));
+        .when_called_with(matchers::anything())
+        .then_return(|| Err(TopicRepoError::Get.into_report()));
     let service = build_service(repo.clone());
 
     assert!(service.get(1).await.is_err());
 
-    repo.get_mock.assert_invocation_count(1);
+    repo.get_mock
+        .verify_call_with(matchers::anything())
+        .was_called_only_once();
 }
 
 const DEFAULT_PAGE_SIZE: u64 = 25;
@@ -84,7 +93,9 @@ const DEFAULT_PAGE_SIZE: u64 = 25;
 #[tokio::test]
 async fn list_no_data_in_repo_returns_empty_vec() {
     let mut repo = MockTopicRepository::default();
-    repo.list_mock.returning(|| Ok(vec![]));
+    repo.list_mock
+        .when_called_with(matchers::anything())
+        .then_return(|| Ok(vec![]));
     let service = build_service(repo.clone());
 
     assert_eq!(
@@ -95,13 +106,21 @@ async fn list_no_data_in_repo_returns_empty_vec() {
             .expect("list should succeed")
     );
 
-    repo.list_mock.assert_invocation_count(1);
+    repo.list_mock
+        .verify_call_with(matchers::anything())
+        .was_called_only_once();
+
+    repo.get_mock
+        .verify_call_with(matchers::anything())
+        .was_not_called();
 }
 
 #[tokio::test]
 async fn list_returns_all_topics_returned_from_repo_if_le_page_size() {
     let mut repo = MockTopicRepository::default();
-    repo.list_mock.returning(|| Ok(create_topics(NUM_TOPICS)));
+    repo.list_mock
+        .when_called_with(matchers::anything())
+        .then_return(|| Ok(create_topics(NUM_TOPICS)));
 
     const NUM_TOPICS: usize = 20;
     let service = build_service(repo.clone());
@@ -115,7 +134,9 @@ async fn list_returns_all_topics_returned_from_repo_if_le_page_size() {
             .len()
     );
 
-    repo.list_mock.assert_invocation_count(1);
+    repo.list_mock
+        .verify_call_with(matchers::anything())
+        .was_called_only_once();
 }
 
 #[tokio::test]
@@ -124,8 +145,8 @@ async fn list_truncates_topics_returned_from_repo_if_gt_page_size() {
 
     let mut repo = MockTopicRepository::default();
     repo.list_mock
-        .returning(|| Ok(create_topics(NUM_TOPICS)))
-        .with_arg_match(matchers::eq(default_list_criteria()));
+        .when_called_with(matchers::eq(default_list_criteria()))
+        .then_return(|| Ok(create_topics(NUM_TOPICS)));
 
     let service = build_service(repo.clone());
 
@@ -138,15 +159,17 @@ async fn list_truncates_topics_returned_from_repo_if_gt_page_size() {
             .len()
     );
 
-    repo.list_mock.assert_invocation_count(1);
+    repo.list_mock
+        .verify_call_with(matchers::eq(default_list_criteria()))
+        .was_called_only_once();
 }
 
 #[tokio::test]
 async fn list_returns_error_if_repo_returns_error() {
     let mut repo = MockTopicRepository::default();
     repo.list_mock
-        .returning(|| Err(TopicRepoError::List.into_report()))
-        .with_arg_match(matchers::eq(default_list_criteria()));
+        .when_called_with(matchers::eq(default_list_criteria()))
+        .then_return(|| Err(TopicRepoError::List.into_report()));
 
     let service = build_service(repo.clone());
 
@@ -155,7 +178,9 @@ async fn list_returns_error_if_repo_returns_error() {
         .await
         .expect_err("list should return error");
 
-    repo.list_mock.assert_invocation_count(1);
+    repo.list_mock
+        .verify_call_with(matchers::eq(default_list_criteria()))
+        .was_called_only_once();
 }
 
 #[tokio::test]
@@ -167,8 +192,8 @@ async fn create_calls_repo_create_with_passed_in_name_and_desc_and_does_not_modi
 
     let mut repo = MockTopicRepository::default();
     repo.create_mock
-        .with_arg_match(matchers::eq(new_topic))
-        .returning(|| {
+        .when_called_with(matchers::eq(new_topic.clone()))
+        .then_return(|| {
             Ok(Topic::create(
                 1usize,
                 EXPECTED_NAME.into(),
@@ -178,7 +203,7 @@ async fn create_calls_repo_create_with_passed_in_name_and_desc_and_does_not_modi
 
     let service = build_service(repo.clone());
 
-    let new_topic = service
+    let created_topic = service
         .create(TopicCreation::new(
             EXPECTED_NAME.into(),
             Some(EXPECTED_DESC.into()),
@@ -186,10 +211,12 @@ async fn create_calls_repo_create_with_passed_in_name_and_desc_and_does_not_modi
         .await
         .expect("create topic succeeds");
 
-    assert_eq!(EXPECTED_NAME, &new_topic.name);
-    assert_eq!(Some(EXPECTED_DESC), new_topic.description.as_deref());
+    assert_eq!(EXPECTED_NAME, &created_topic.name);
+    assert_eq!(Some(EXPECTED_DESC), created_topic.description.as_deref());
 
-    repo.create_mock.assert_invocation_count(1);
+    repo.create_mock
+        .verify_call_with(matchers::eq(new_topic))
+        .was_called_only_once();
 }
 
 // TODO test that metrics are called, caching, etc.. too much work for now

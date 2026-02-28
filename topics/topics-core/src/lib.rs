@@ -75,10 +75,11 @@ pub mod mock {
     use std::{
         fmt::Debug,
         marker::PhantomData,
-        sync::{Arc, atomic::AtomicUsize},
+        sync::{Arc, Mutex, atomic::AtomicUsize},
     };
 
     use ids::Id;
+    use itertools::Itertools;
 
     use crate::{
         TopicRepository,
@@ -95,25 +96,28 @@ pub mod mock {
     }
 
     pub mod matchers {
-        use std::{fmt::Debug, marker::PhantomData};
+        use std::{fmt::Debug, marker::PhantomData, usize};
 
         use crate::mock::ThreadSafe;
 
-        pub trait Matcher<T>: ThreadSafe {
+        pub trait Matcher<T>: ThreadSafe + std::any::Any {
             fn matches(&self, val: &T) -> bool;
             fn expected(&self) -> String;
+            fn priority(&self) -> usize;
+            fn is_equivalent(&self, other: &dyn Matcher<T>) -> bool;
         }
 
-        pub fn any<T: ThreadSafe>() -> impl Matcher<T> {
-            Any(PhantomData)
+        pub fn anything<T: ThreadSafe>() -> impl Matcher<T> {
+            Anything(PhantomData)
         }
 
         pub fn eq<T: PartialEq + ThreadSafe + Debug>(val: T) -> impl Matcher<T> {
             Eq(val)
         }
 
-        struct Any<T>(PhantomData<T>);
-        impl<T: ThreadSafe> Matcher<T> for Any<T> {
+        struct Anything<T>(PhantomData<T>);
+
+        impl<T: ThreadSafe> Matcher<T> for Anything<T> {
             fn matches(&self, _: &T) -> bool {
                 true
             }
@@ -121,9 +125,20 @@ pub mod mock {
             fn expected(&self) -> String {
                 "anything".into()
             }
+
+            fn priority(&self) -> usize {
+                usize::MAX
+            }
+
+            fn is_equivalent(&self, other: &dyn Matcher<T>) -> bool {
+                (other as &dyn std::any::Any)
+                    .downcast_ref::<Anything<T>>()
+                    .is_some()
+            }
         }
 
-        struct Eq<T: PartialEq>(T);
+        #[derive(Debug)]
+        struct Eq<T: PartialEq + ThreadSafe + Debug>(T);
         impl<T: PartialEq + ThreadSafe + Debug> Matcher<T> for Eq<T> {
             fn matches(&self, val: &T) -> bool {
                 &self.0 == val
@@ -131,6 +146,16 @@ pub mod mock {
 
             fn expected(&self) -> String {
                 format!("equal to {:?}", self.0)
+            }
+
+            fn priority(&self) -> usize {
+                usize::MIN
+            }
+
+            fn is_equivalent(&self, other: &dyn Matcher<T>) -> bool {
+                (other as &dyn std::any::Any)
+                    .downcast_ref::<Eq<T>>()
+                    .map_or(false, |Eq(val)| &self.0 == val)
             }
         }
     }
@@ -145,19 +170,76 @@ pub mod mock {
         }
     }
 
-    pub struct Mock<I, F: MockFn<I>> {
-        invocation_count: Arc<AtomicUsize>,
+    struct Scenario<I, F: MockFn<I>> {
+        arg_matcher: Arc<dyn Matcher<F::Args>>,
         returning: Returning<F::Output>,
-        arg_match: Option<Arc<dyn Matcher<F::Args>>>,
+        invocation_count: Arc<AtomicUsize>,
+    }
+    impl<I, F: MockFn<I>> Clone for Scenario<I, F> {
+        fn clone(&self) -> Self {
+            Self {
+                arg_matcher: Arc::clone(&self.arg_matcher),
+                returning: self.returning.clone(),
+                invocation_count: Arc::clone(&self.invocation_count),
+            }
+        }
+    }
+
+    pub struct ScenarioBuilder<'a, I, F: MockFn<I>> {
+        mock: &'a mut Mock<I, F>,
+        arg_matcher: Arc<dyn Matcher<F::Args>>,
+    }
+
+    impl<'a, I, F: MockFn<I>> ScenarioBuilder<'a, I, F> {
+        pub fn then_return(self, value_fn: impl ReturningFn<F::Output>) {
+            let mut scenarios = self.mock.scenarios.lock().expect("mutex is not poisoned");
+            scenarios.push(Scenario {
+                arg_matcher: self.arg_matcher,
+                returning: Returning(Arc::new(value_fn)),
+                invocation_count: Arc::new(AtomicUsize::new(0)),
+            });
+            // self.mock // do something like this if we have overlapping arg matchers (like eq and any() for the same function). We'd want the eq to match first
+            //     .scenarios
+            //     .sort_by(|s1, s2| s1.arg_matcher.priority().cmp(&s2.arg_matcher.priority()));
+        }
+    }
+
+    pub struct Verification<I, F: MockFn<I>> {
+        mock_name: &'static str,
+        scenario: Option<Scenario<I, F>>,
+    }
+
+    impl<I, F: MockFn<I>> Verification<I, F> {
+        pub fn was_called_only_once(&self) {
+            self.was_called_n_times(1);
+        }
+
+        pub fn was_not_called(&self) {
+            self.was_called_n_times(0);
+        }
+
+        pub fn was_called_n_times(&self, expected_count: usize) {
+            let actual_call_count = self.scenario.as_ref().map_or(0, |s| {
+                s.invocation_count
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            });
+            assert_eq!(
+                expected_count, actual_call_count,
+                "'{}' expected invocation count of {}, got {}",
+                self.mock_name, expected_count, actual_call_count
+            );
+        }
+    }
+
+    pub struct Mock<I, F: MockFn<I>> {
+        scenarios: Arc<Mutex<Vec<Scenario<I, F>>>>,
         name: &'static str,
     }
 
     impl<I, F: MockFn<I>> Clone for Mock<I, F> {
         fn clone(&self) -> Self {
             Self {
-                invocation_count: Arc::clone(&self.invocation_count),
-                returning: self.returning.clone(),
-                arg_match: self.arg_match.clone(),
+                scenarios: Arc::clone(&self.scenarios),
                 name: self.name,
             }
         }
@@ -169,9 +251,7 @@ pub mod mock {
     {
         fn new(name: &'static str) -> Mock<I, F> {
             Self {
-                invocation_count: Arc::new(AtomicUsize::new(0)),
-                returning: Returning(Arc::new(|| F::default_output())),
-                arg_match: None,
+                scenarios: Default::default(),
                 name,
             }
         }
@@ -184,49 +264,71 @@ pub mod mock {
             Mock::new("create")
         }
 
-        pub fn returning(&mut self, value_fn: impl ReturningFn<F::Output>) -> &mut Self {
-            self.returning = Returning(Arc::new(value_fn));
-            self
-        }
-
         // TODO I don't think this is how mocks are supposed to work.. idk, maybe.
         // I think it should be a "if args match this, return this" sort of thing.
-        pub fn with_arg_match(&mut self, arg_match: impl Matcher<F::Args> + 'static) -> &mut Self {
-            self.arg_match = Some(Arc::new(arg_match));
-            self
+        pub fn when_called_with(
+            &mut self,
+            arg_match: impl Matcher<F::Args> + 'static,
+        ) -> ScenarioBuilder<'_, I, F> {
+            ScenarioBuilder {
+                mock: self,
+                arg_matcher: Arc::new(arg_match),
+            }
         }
 
-        pub fn invocation_count(&self) -> usize {
-            self.invocation_count
-                .load(std::sync::atomic::Ordering::Relaxed)
+        pub fn verify_call_with(
+            &self,
+            arg_match: impl Matcher<F::Args> + 'static,
+        ) -> Verification<I, F> {
+            let scenarios = self.scenarios.lock().expect("mutex not poisoned");
+            let scenario = scenarios
+                .iter()
+                .find(|s| arg_match.is_equivalent(&*s.arg_matcher))
+                .cloned();
+
+            Verification {
+                mock_name: self.name,
+                scenario,
+            }
         }
 
-        pub fn assert_invocation_count(&self, expected: usize) {
-            let actual = self.invocation_count();
-            assert_eq!(
-                expected, actual,
-                "{}: expected {expected} invocations, got {actual} instead",
-                self.name
-            );
+        fn find_matching_scenarios(&self, args: &F::Args) -> Vec<Scenario<I, F>> {
+            let scenarios = self.scenarios.lock().expect("mutex is not poisoned");
+
+            scenarios
+                .iter()
+                .filter(|s| {
+                    println!("here we go blah blah");
+                    s.arg_matcher.matches(args)
+                })
+                .map(|s| s.clone())
+                .collect()
         }
 
         fn invoke(&self, args: F::Args) -> F::Output {
-            self.invocation_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let matching_scenarios = self.find_matching_scenarios(&args);
 
-            if let Some(arg_match) = &self.arg_match
-                && !arg_match.matches(&args)
-            {
-                panic!(
-                    "Expected arg match failed for '{}' call. Actual args: {:?}, Expected '{}'",
+            match &*matching_scenarios {
+                [] => panic!(
+                    "No matching scenarios found for '{}' call. Expected call arguments to be one of the following: [{}]. Actual args were `{:?}`",
                     self.name,
-                    args,
-                    arg_match.expected()
-                )
+                    matching_scenarios
+                        .iter()
+                        .map(|s| s.arg_matcher.expected())
+                        .join(","),
+                    &args,
+                ),
+                [scenario] => {
+                    scenario
+                        .invocation_count
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    scenario.returning.0()
+                }
+                [..] => panic!(
+                    "Multiple scenarios matched the args {:?} for {}",
+                    &args, self.name,
+                ),
             }
-
-            // will return "default mock value" if nothing was specified
-            self.returning.0()
         }
     }
 
